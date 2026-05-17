@@ -1,0 +1,63 @@
+{
+  "version": "1.0",
+  "name": "Basic Vehicle Inspection Checklist",
+  "description": "Standard multi-point vehicle inspection checklist. Editable.",
+  "sections": [
+    {
+      "id": "exterior",
+      "name": "Exterior",
+      "items": [
+        {"id": "ext_001", "name": "Hood condition", "type": "condition", "options": ["Good", "Fair", "Poor"]},
+        {"id": "ext_002", "name": "Windshield", "type": "condition", "options": ["Good", "Chip", "Crack", "Replace"]},
+        {"id": "ext_003", "name": "Wipers", "type": "condition", "options": ["Good", "Worn", "Replace"]},
+        {"id": "ext_004", "name": "Body panels", "type": "condition", "options": ["Good", "Minor damage", "Major damage"]},
+        {"id": "ext_005", "name": "Lights (all)", "type": "condition", "options": ["All working", "Front issue", "Rear issue", "Replace"]}
+      ]
+    },
+    {
+      "id": "tires",
+      "name": "Tires & Wheels",
+      "items": [
+        {"id": "tire_001", "name": "Front left tread depth", "type": "measurement", "unit": "32nds"},
+        {"id": "tire_002", "name": "Front right tread depth", "type": "measurement", "unit": "32nds"},
+        {"id": "tire_003", "name": "Rear left tread depth", "type": "measurement", "unit": "32nds"},
+        {"id": "tire_004", "name": "Rear right tread depth", "type": "measurement", "unit": "32nds"},
+        {"id": "tire_005", "name": "Tire pressure (all)", "type": "condition", "options": ["OK", "Low", "High", "Check"]},
+        {"id": "tire_006", "name": "Wheel condition", "type": "condition", "options": ["Good", "Curb rash", "Bent", "Replace"]}
+      ]
+    },
+    {
+      "id": "brakes",
+      "name": "Brakes",
+      "items": [
+        {"id": "brk_001", "name": "Front brake pads", "type": "measurement", "unit": "mm"},
+        {"id": "brk_002", "name": "Rear brake pads", "type": "measurement", "unit": "mm"},
+        {"id": "brk_003", "name": "Rotors condition", "type": "condition", "options": ["Good", "Worn", "Grooved", "Replace"]},
+        {"id": "brk_004", "name": "Brake fluid level", "type": "condition", "options": ["Full", "Low", "Very low"]}
+      ]
+    },
+    {
+      "id": "engine",
+      "name": "Engine & Fluids",
+      "items": [
+        {"id": "eng_001", "name": "Oil level", "type": "condition", "options": ["Full", "Low", "Very low", "Dirty"]},
+        {"id": "eng_002", "name": "Coolant level", "type": "condition", "options": ["Full", "Low", "Very low"]},
+        {"id": "eng_003", "name": "Power steering fluid", "type": "condition", "options": ["Full", "Low", "N/A"]},
+        {"id": "eng_004", "name": "Transmission fluid", "type": "condition", "options": ["Full", "Low", "Dirty", "N/A"]},
+        {"id": "eng_005", "name": "Air filter", "type": "condition", "options": ["Clean", "Dirty", "Replace"]},
+        {"id": "eng_006", "name": "Battery condition", "type": "condition", "options": ["Good", "Weak", "Replace"]},
+        {"id": "eng_007", "name": "Belt condition", "type": "condition", "options": ["Good", "Worn", "Cracked", "Replace"]}
+      ]
+    },
+    {
+      "id": "undercarriage",
+      "name": "Undercarriage",
+      "items": [
+        {"id": "und_001", "name": "Exhaust system", "type": "condition", "options": ["Good", "Leak", "Damage", "Replace"]},
+        {"id": "und_002", "name": "Suspension components", "type": "condition", "options": ["Good", "Worn", "Damaged"]},
+        {"id": "und_003", "name": "CV boots / axles", "type": "condition", "options": ["Good", "Torn", "Leaking"]},
+        {"id": "und_004", "name": "Fluid leaks", "type": "condition", "options": ["None", "Minor", "Active leak"]}
+      ]
+    }
+  ]
+}

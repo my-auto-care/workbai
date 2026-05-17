@@ -1,0 +1,24 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Backend VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.BACKEND_VPS_IP }}
+          username: ari
+          key: ${{ secrets.DO_API_TOKEN }}
+          script: |
+            cd ~/workbai
+            git pull origin main
+            docker compose -f docker-compose.yml up -d --build backend
