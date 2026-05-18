@@ -6,7 +6,7 @@ import os
 import logging
 import asyncio
 
-from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli, llm, RoomInputOptions
+from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli, RoomInputOptions
 from livekit.agents import Agent, AgentSession
 from livekit.plugins import assemblyai, elevenlabs, silero
 from livekit.plugins import anthropic as lk_anthropic
