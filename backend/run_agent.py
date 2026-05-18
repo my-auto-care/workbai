@@ -1,24 +1,19 @@
-#!/usr/bin/env python3
 """
-Workbay AI Voice Agent entrypoint — run directly, not as module
+Workbay AI Voice Agent entrypoint — runs the LiveKit worker directly.
 """
 import os
-import sys
-import logging
 import asyncio
+import logging
 
-# Add app to path
-sys.path.insert(0, '/app')
-
-from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli, RoomInputOptions
+from livekit.agents import WorkerOptions, Worker, AutoSubscribe, JobContext, RoomInputOptions
 from livekit.agents import Agent, AgentSession
 from livekit.plugins import assemblyai, elevenlabs, silero
 from livekit.plugins import anthropic as lk_anthropic
 
 from app.voice.prompts import SYSTEM_PROMPT_EN, SYSTEM_PROMPT_ES, AUTOMOTIVE_TERMS_EN, AUTOMOTIVE_TERMS_ES
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("workbay.voice")
+logging.basicConfig(level=logging.INFO)
 
 
 class WorkbayInspectionAgent(Agent):
@@ -71,8 +66,8 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(float("inf"))
 
 
-if __name__ == "__main__":
-    cli.run_app(
+async def main():
+    worker = Worker(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
             api_key=os.getenv("LIVEKIT_API_KEY"),
@@ -80,3 +75,9 @@ if __name__ == "__main__":
             ws_url=os.getenv("LIVEKIT_URL"),
         )
     )
+    logger.info("Starting Workbay voice agent worker...")
+    await worker.run()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
