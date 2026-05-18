@@ -31,6 +31,11 @@ class FindingUpdate(BaseModel):
     structured_data: Optional[dict] = None
     condition: Optional[FindingCondition] = None
 
+@router.get("/sessions")
+def list_sessions(db: Session = Depends(get_db)):
+    sessions = db.query(InspectionSession).order_by(InspectionSession.started_at.desc()).limit(100).all()
+    return [{"id": str(s.id), "shop_id": str(s.shop_id), "technician_id": str(s.technician_id), "status": s.status, "customer_concern": s.customer_concern, "started_at": s.started_at} for s in sessions]
+
 @router.post("/sessions", status_code=201)
 def create_session(body: SessionCreate, db: Session = Depends(get_db)):
     session = InspectionSession(
