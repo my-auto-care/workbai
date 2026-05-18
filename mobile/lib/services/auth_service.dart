@@ -2,8 +2,8 @@ import 'package:auth0_flutter/auth0_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 
-const String kAuth0Domain = 'workbay.us.auth0.com';
-const String kAuth0ClientId = 'REPLACE_WITH_AUTH0_CLIENT_ID';
+const String kAuth0Domain = 'dev-bs1544neeany10qn.us.auth0.com';
+const String kAuth0ClientId = 'odoPUeNefjahtA3mXsNiSKoZzNSORQ6u';
 
 class AuthService {
   static final AuthService _i = AuthService._();
