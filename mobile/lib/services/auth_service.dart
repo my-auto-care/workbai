@@ -30,7 +30,7 @@ class AuthService {
 
   Future<void> login() async {
     _credentials = await _auth0.webAuthentication(scheme: 'workbay').login(
-      audience: 'https://api.workbay.ai',
+      // No audience — use default Auth0 scopes only, no custom API
       scopes: {'openid', 'profile', 'email', 'offline_access'},
     );
     ApiService().setAuthToken(_credentials!.accessToken);
@@ -39,7 +39,9 @@ class AuthService {
   }
 
   Future<void> logout() async {
-    await _auth0.webAuthentication(scheme: 'workbay').logout();
+    try {
+      await _auth0.webAuthentication(scheme: 'workbay').logout();
+    } catch (_) {}
     _credentials = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
