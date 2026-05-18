@@ -1,23 +1,34 @@
 """
 Workbay AI Voice Agent
-LiveKit Agents v1.x + AssemblyAI STT + ElevenLabs TTS + Claude Sonnet 4.6
+LiveKit Agents v1.x + AssemblyAI STT + ElevenLabs TTS + Claude Sonnet
 """
 import os
 import logging
 import asyncio
 
-from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli, llm
-from livekit.agents.voice_assistant import VoiceAssistant
-from livekit.plugins import assemblyai, elevenlabs
+from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli, llm, RoomInputOptions
+from livekit.agents import Agent, AgentSession
+from livekit.plugins import assemblyai, elevenlabs, silero
 from livekit.plugins import anthropic as lk_anthropic
-from livekit.plugins import silero
 
 from app.voice.prompts import SYSTEM_PROMPT_EN, SYSTEM_PROMPT_ES, AUTOMOTIVE_TERMS_EN, AUTOMOTIVE_TERMS_ES
-from app.voice.tools import handle_tool_call
 
 logger = logging.getLogger("workbay.voice")
 
-session_states: dict = {}
+
+class WorkbayInspectionAgent(Agent):
+    def __init__(self, language: str = "en"):
+        prompt = SYSTEM_PROMPT_EN if language == "en" else SYSTEM_PROMPT_ES
+        super().__init__(instructions=prompt)
+        self.language = language
+
+    async def on_enter(self):
+        greeting = (
+            "Workbay inspection ready. Tell me the vehicle year, make, and model to begin."
+            if self.language == "en"
+            else "Inspección Workbay lista. Dígame el año, marca y modelo del vehículo para comenzar."
+        )
+        await self.session.say(greeting, allow_interruptions=True)
 
 
 async def entrypoint(ctx: JobContext):
@@ -27,21 +38,9 @@ async def entrypoint(ctx: JobContext):
     session_id = room_name.replace("inspection-", "")
     language = "en"
 
-    session_states[session_id] = {
-        "session_id": session_id,
-        "current_item_index": 0,
-        "checklist_items": [],
-        "language": language
-    }
-
     logger.info(f"Voice agent started for session {session_id}")
 
-    initial_ctx = llm.ChatContext().append(
-        role="system",
-        text=SYSTEM_PROMPT_EN if language == "en" else SYSTEM_PROMPT_ES
-    )
-
-    assistant = VoiceAssistant(
+    session = AgentSession(
         vad=silero.VAD.load(),
         stt=assemblyai.STT(
             api_key=os.getenv("ASSEMBLYAI_API_KEY"),
@@ -56,18 +55,14 @@ async def entrypoint(ctx: JobContext):
             voice_id="21m00Tcm4TlvDq8ikWAM",
             model_id="eleven_turbo_v2",
         ),
-        chat_ctx=initial_ctx,
     )
 
-    assistant.start(ctx.room)
-
-    greeting = (
-        "Workbay inspection ready. Tell me the vehicle year, make, and model to begin."
-        if language == "en"
-        else "Inspección Workbay lista. Dígame el año, marca y modelo del vehículo para comenzar."
+    await session.start(
+        room=ctx.room,
+        agent=WorkbayInspectionAgent(language=language),
+        room_input_options=RoomInputOptions(),
     )
-    await asyncio.sleep(1)
-    await assistant.say(greeting, allow_interruptions=True)
+
     await asyncio.sleep(float("inf"))
 
 
