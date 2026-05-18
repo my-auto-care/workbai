@@ -15,7 +15,7 @@ services:
     env_file:
       - ./backend/.env
     restart: unless-stopped
-    command: python -m app.voice.agent
+    command: python -m app.voice.agent start
 
   nginx:
     image: nginx:alpine
