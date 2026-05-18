@@ -13,15 +13,7 @@ services:
     env_file:
       - ./backend/.env
     restart: unless-stopped
-    environment:
-      - LIVEKIT_URL=wss://workbay-ai-rrcovb9m.livekit.cloud
-      - LIVEKIT_API_KEY=APIqwhVtD3beAgw
-      - LIVEKIT_API_SECRET=NfX8UL4Y1AAAieBjaWdW0AQs1JMXZ6dSsQTDhBZIxET
-    command: >
-      python -m app.voice.agent start
-      --url wss://workbay-ai-rrcovb9m.livekit.cloud
-      --api-key APIqwhVtD3beAgw
-      --api-secret NfX8UL4Y1AAAieBjaWdW0AQs1JMXZ6dSsQTDhBZIxET
+    command: python /app/run_agent.py
 
   nginx:
     image: nginx:alpine
