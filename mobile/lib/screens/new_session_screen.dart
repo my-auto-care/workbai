@@ -21,6 +21,7 @@ class _NewSessionScreenState extends State<NewSessionScreen> {
   static const String _kShopId = '00000000-0000-0000-0000-000000000001';
   static const String _kTechId = '00000000-0000-0000-0000-000000000002';
   static const String _kVehicleId = '00000000-0000-0000-0000-000000000003';
+  static const String _kChecklistId = '1bbf9892-68b8-4842-bfd9-7a4cd53dcca8';
 
   Future<void> _start() async {
     setState(() { _loading = true; _error = null; });
@@ -29,6 +30,7 @@ class _NewSessionScreenState extends State<NewSessionScreen> {
         shopId: _kShopId,
         technicianId: _kTechId,
         vehicleId: _kVehicleId,
+        checklistTemplateId: _kChecklistId,
         customerConcern: _concernCtrl.text.trim().isEmpty ? null : _concernCtrl.text.trim(),
       );
       if (mounted) {
