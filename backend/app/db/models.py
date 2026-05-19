@@ -28,6 +28,7 @@ class UserRole(str, enum.Enum):
 
 
 class SessionStatus(str, enum.Enum):
+    pending = "pending"
     in_progress = "in_progress"
     completed = "completed"
     abandoned = "abandoned"
@@ -82,14 +83,14 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     shop = relationship("Shop", back_populates="users")
-    sessions = relationship("InspectionSession", back_populates="technician")
+    sessions = relationship("InspectionSession", back_populates="technician", foreign_keys="InspectionSession.technician_id")
 
 
 class Vehicle(Base):
     __tablename__ = "vehicles"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
-    vin = Column(Text)  # encrypted at app layer
+    vin = Column(Text)
     year = Column(Integer)
     make = Column(Text)
     model = Column(Text)
@@ -118,9 +119,16 @@ class InspectionSession(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
     technician_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id"), nullable=False)
+    vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id"), nullable=True)
     checklist_template_id = Column(UUID(as_uuid=True), ForeignKey("checklist_templates.id"))
     customer_concern = Column(Text)
+    # Denormalized vehicle info for MVP (no pre-existing vehicle record required)
+    vehicle_year = Column(String(10))
+    vehicle_make = Column(String(100))
+    vehicle_model = Column(String(100))
+    vehicle_vin = Column(String(50))
+    # Dispatch: technician assigned by shop manager
+    assigned_technician_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     status = Column(SAEnum(SessionStatus), default=SessionStatus.in_progress)
     started_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
@@ -128,7 +136,8 @@ class InspectionSession(Base):
     audio_retention_until = Column(DateTime)
 
     shop = relationship("Shop", back_populates="sessions")
-    technician = relationship("User", back_populates="sessions")
+    technician = relationship("User", back_populates="sessions", foreign_keys=[technician_id])
+    assigned_technician = relationship("User", foreign_keys=[assigned_technician_id])
     vehicle = relationship("Vehicle", back_populates="sessions")
     checklist_template = relationship("ChecklistTemplate", back_populates="sessions")
     findings = relationship("Finding", back_populates="session")
