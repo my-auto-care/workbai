@@ -26,6 +26,11 @@ dependencies:
   # Icons
   cupertino_icons: ^1.0.8
 
+dependency_overrides:
+  # flutter_webrtc 0.13.1+hotfix.1 fails to compile against compileSdk 35
+  # Override to latest patched version
+  flutter_webrtc: ^0.14.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
