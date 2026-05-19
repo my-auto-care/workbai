@@ -6,6 +6,7 @@ import os
 import logging
 import asyncio
 import httpx
+import json
 from typing import Annotated
 
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli, RoomInputOptions
@@ -115,6 +116,13 @@ class WorkbayInspectionAgent(Agent):
     ) -> str:
         """Signal the mobile app that a photo is needed for this item."""
         logger.info(f"Photo requested for item {item_id}: {reason}")
+        if self._room:
+            try:
+                payload = json.dumps({"type": "photo_request", "item_id": item_id, "reason": reason, "session_id": self.session_id}).encode()
+                await self._room.local_participant.publish_data(payload, reliable=True)
+                logger.info(f"Photo request data message sent for {item_id}")
+            except Exception as e:
+                logger.warning(f"Failed to send photo request data message: {e}")
         return f"Photo request sent for {item_id}. Waiting for technician to capture image."
 
     @function_tool
@@ -157,7 +165,7 @@ async def entrypoint(ctx: JobContext):
 
     await agent_session.start(
         room=ctx.room,
-        agent=WorkbayInspectionAgent(session_id=session_id, language=language),
+        agent=WorkbayInspectionAgent(session_id=session_id, language=language, room=ctx.room),
         room_input_options=RoomInputOptions(),
     )
 
