@@ -13,23 +13,25 @@ class _NewSessionScreenState extends State<NewSessionScreen> {
   final _yearCtrl = TextEditingController();
   final _makeCtrl = TextEditingController();
   final _modelCtrl = TextEditingController();
-  final _mileageCtrl = TextEditingController();
+  final _vinCtrl = TextEditingController();
   bool _loading = false;
   String? _error;
 
-  // Hardcoded for MVP — will come from Auth0 user profile post-auth integration
   static const String _kShopId = '00000000-0000-0000-0000-000000000001';
   static const String _kTechId = '00000000-0000-0000-0000-000000000002';
-  static const String _kVehicleId = '00000000-0000-0000-0000-000000000003';
   static const String _kChecklistId = '1bbf9892-68b8-4842-bfd9-7a4cd53dcca8';
 
   Future<void> _start() async {
     setState(() { _loading = true; _error = null; });
     try {
+      final year = int.tryParse(_yearCtrl.text.trim());
       final session = await ApiService().createSession(
         shopId: _kShopId,
         technicianId: _kTechId,
-        vehicleId: _kVehicleId,
+        vehicleYear: year,
+        vehicleMake: _makeCtrl.text.trim().isEmpty ? null : _makeCtrl.text.trim(),
+        vehicleModel: _modelCtrl.text.trim().isEmpty ? null : _modelCtrl.text.trim(),
+        vehicleVin: _vinCtrl.text.trim().isEmpty ? null : _vinCtrl.text.trim(),
         checklistTemplateId: _kChecklistId,
         customerConcern: _concernCtrl.text.trim().isEmpty ? null : _concernCtrl.text.trim(),
       );
@@ -72,7 +74,7 @@ class _NewSessionScreenState extends State<NewSessionScreen> {
             Expanded(child: _field(_modelCtrl, 'Model')),
           ]),
           const SizedBox(height: 12),
-          _field(_mileageCtrl, 'Mileage', TextInputType.number),
+          _field(_vinCtrl, 'VIN (optional)'),
           const SizedBox(height: 24),
           const Text('Customer Concern', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13, fontWeight: FontWeight.w500)),
           const SizedBox(height: 12),

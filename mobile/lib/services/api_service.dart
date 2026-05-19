@@ -16,29 +16,50 @@ class ApiService {
     if (_authToken != null) 'Authorization': 'Bearer $_authToken',
   };
 
-  Future<List<Map<String, dynamic>>> getSessions() async {
-    final r = await http.get(Uri.parse('$kBaseUrl/sessions'), headers: _h);
+  Future<List<Map<String, dynamic>>> getSessions({String? status, String? technicianId}) async {
+    var url = '$kBaseUrl/sessions';
+    final params = <String>[];
+    if (status != null) params.add('status=$status');
+    if (technicianId != null) params.add('technician_id=$technicianId');
+    if (params.isNotEmpty) url += '?${params.join('&')}';
+    final r = await http.get(Uri.parse(url), headers: _h);
     if (r.statusCode == 200) return List<Map<String, dynamic>>.from(jsonDecode(r.body));
     throw Exception('Failed to load sessions');
   }
 
   Future<Map<String, dynamic>> createSession({
     required String shopId,
-    required String technicianId,
-    required String vehicleId,
+    String? technicianId,
+    String? vehicleId,
+    int? vehicleYear,
+    String? vehicleMake,
+    String? vehicleModel,
+    String? vehicleVin,
     String? checklistTemplateId,
     String? customerConcern,
+    String? status,
   }) async {
     final r = await http.post(Uri.parse('$kBaseUrl/sessions'), headers: _h,
         body: jsonEncode({
           'shop_id': shopId,
-          'technician_id': technicianId,
-          'vehicle_id': vehicleId,
+          if (technicianId != null) 'technician_id': technicianId,
+          if (vehicleId != null) 'vehicle_id': vehicleId,
+          if (vehicleYear != null) 'vehicle_year': vehicleYear,
+          if (vehicleMake != null) 'vehicle_make': vehicleMake,
+          if (vehicleModel != null) 'vehicle_model': vehicleModel,
+          if (vehicleVin != null) 'vehicle_vin': vehicleVin,
           if (checklistTemplateId != null) 'checklist_template_id': checklistTemplateId,
           if (customerConcern != null) 'customer_concern': customerConcern,
+          if (status != null) 'status': status,
         }));
     if (r.statusCode == 201) return jsonDecode(r.body);
     throw Exception('Failed to create session: ${r.body}');
+  }
+
+  Future<Map<String, dynamic>> startSession(String sessionId) async {
+    final r = await http.post(Uri.parse('$kBaseUrl/sessions/$sessionId/start'), headers: _h);
+    if (r.statusCode == 200) return jsonDecode(r.body);
+    throw Exception('Failed to start session');
   }
 
   Future<Map<String, dynamic>> getReport(String sessionId) async {
