@@ -89,7 +89,6 @@ class ApiService {
     if (r.statusCode == 200) return List<Map<String, dynamic>>.from(jsonDecode(r.body));
     throw Exception('Failed to load checklists');
   }
-}
 
   Future<Map<String, dynamic>> getUploadUrl({
     required String sessionId,
@@ -122,3 +121,4 @@ class ApiService {
         }));
     if (r.statusCode != 201) throw Exception('Failed to attach media: ${r.body}');
   }
+}
