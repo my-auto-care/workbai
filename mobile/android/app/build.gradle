@@ -1,14 +1,8 @@
 plugins {
     id "com.android.application"
+    id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
 }
-
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('local.properties')
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
-}
-def flutterRoot = localProperties.getProperty('flutter.sdk')
 
 android {
     namespace "ai.workbay.app"
@@ -19,6 +13,8 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
+    kotlinOptions { jvmTarget = '17' }
 
     defaultConfig {
         applicationId "ai.workbay.app"
@@ -42,17 +38,3 @@ android {
 }
 
 flutter { source '../..' }
-
-dependencies {
-    // Explicitly add flutter engine AARs so Java/Kotlin sources can resolve
-    // io.flutter.* and androidx.annotation.* that the plugin should provide.
-    implementation fileTree(
-        dir: "${flutterRoot}/bin/cache/artifacts/engine/android-arm64-release",
-        include: ['*.jar', '*.aar']
-    )
-    implementation fileTree(
-        dir: "${flutterRoot}/bin/cache/artifacts/engine/android-x64-release",
-        include: ['*.jar', '*.aar']
-    )
-    implementation 'androidx.annotation:annotation:1.7.0'
-}
