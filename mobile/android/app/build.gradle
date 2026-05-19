@@ -4,6 +4,11 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+def localPropsFile = rootProject.file("local.properties")
+def localProps = new Properties()
+if (localPropsFile.exists()) { localPropsFile.withReader('UTF-8') { r -> localProps.load(r) } }
+def flutterRoot = localProps.getProperty('flutter.sdk')
+
 android {
     namespace "ai.workbay.app"
     compileSdk 35
@@ -40,7 +45,6 @@ android {
 flutter { source '../..' }
 
 dependencies {
-    def flutterRoot = localProperties.getProperty('flutter.sdk')
     compileOnly files(
         "${flutterRoot}/bin/cache/artifacts/engine/android-arm64-release/flutter_embedding_release.jar",
         "${flutterRoot}/bin/cache/artifacts/engine/android-x64-release/flutter_embedding_release.jar",
