@@ -2,24 +2,38 @@
 
 Flutter app for hands-free automotive inspection via voice.
 
-## Setup
+## Verified Build Environment (Windows)
 
-1. Install Flutter SDK >= 3.3.0
-2. `flutter pub get`
-3. Set Auth0 client ID in `lib/services/auth_service.dart` (`kAuth0ClientId`)
-4. Run: `flutter run` (device/emulator connected)
+| Component | Version |
+|---|---|
+| Flutter | 3.27.4 |
+| Java | 17 (Adoptium JDK 17) |
+| Kotlin | 1.9.10 |
+| AGP | 8.1.4 |
+| Gradle | 8.3 |
+| compileSdk | 35 |
+| Android NDK | 28.2.13676358 |
 
-## Build APK
+## Run on Emulator (Windows)
 
-```bash
+```powershell
+$env:JAVA_HOME = "C:\Users\ChadBechtel\jdk17\jdk-17.0.11+9"
+cd C:\workbai\mobile
+flutter run -d emulator-5554
+```
+
+## Build Release APK
+
+```powershell
+$env:JAVA_HOME = "C:\Users\ChadBechtel\jdk17\jdk-17.0.11+9"
 flutter build apk --release
-# Output: build/app/outputs/flutter-apk/app-release.apk
+# Output: build\app\outputs\flutter-apk\app-release.apk
 ```
 
 ## Architecture
 
 - `main.dart` — entry, splash, auth restore
-- `screens/login_screen.dart` — Auth0 login
+- `screens/login_screen.dart` — login (dev bypass active, Auth0 re-enable for prod)
 - `screens/home_screen.dart` — session list
 - `screens/new_session_screen.dart` — start inspection form
 - `screens/inspection_screen.dart` — live voice session (LiveKit)
@@ -27,9 +41,13 @@ flutter build apk --release
 - `services/api_service.dart` — backend API calls
 - `services/auth_service.dart` — Auth0 wrapper
 
-## MVP Notes
+## Backend
 
-- Android only
-- `shop_id`, `technician_id`, `vehicle_id` are hardcoded placeholders in `new_session_screen.dart`
-  — replace with real values from Auth0 user profile once auth is wired end-to-end
-- Backend URL: `https://app.workbai.autorepairsolutions.ai`
+`https://app.workbai.autorepairsolutions.ai`
+
+## Test Data (seeded)
+
+- Shop ID: `00000000-0000-0000-0000-000000000001`
+- Technician ID: `00000000-0000-0000-0000-000000000002`
+- Vehicle ID: `00000000-0000-0000-0000-000000000003`
+- Checklist ID: `1bbf9892-68b8-4842-bfd9-7a4cd53dcca8`

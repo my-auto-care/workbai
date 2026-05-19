@@ -6,20 +6,20 @@ plugins {
 
 android {
     namespace "ai.workbay.app"
-    compileSdk flutter.compileSdkVersion
+    compileSdk 35
     ndkVersion "28.2.13676358"
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
-    kotlinOptions { jvmTarget = '1.8' }
+    kotlinOptions { jvmTarget = '17' }
 
     defaultConfig {
         applicationId "ai.workbay.app"
         minSdk 24
-        targetSdk flutter.targetSdkVersion
+        targetSdk 35
         versionCode flutter.versionCode
         versionName flutter.versionName
         manifestPlaceholders += [
@@ -35,10 +35,6 @@ android {
             minifyEnabled false
         }
     }
-}
-
-dependencies {
-    compileOnly "io.flutter:flutter_embedding_debug:1.0.0-42d3d75a56b6f6b6b6b6b6b6b6b6b6b6b6b6b6b"
 }
 
 flutter { source '../..' }
