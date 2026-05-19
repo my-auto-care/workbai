@@ -18,4 +18,23 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
 }
 
+// Manually include flutter plugin subprojects from .flutter-plugins
+def flutterPluginsFile = new File(rootProject.projectDir.parentFile, '.flutter-plugins')
+if (flutterPluginsFile.exists()) {
+    flutterPluginsFile.eachLine { line ->
+        if (line && !line.startsWith('#')) {
+            def parts = line.split('=')
+            if (parts.length == 2) {
+                def pluginName = parts[0].trim()
+                def pluginPath = parts[1].trim()
+                def androidDir = new File(pluginPath, 'android')
+                if (androidDir.exists()) {
+                    include ":${pluginName}"
+                    project(":${pluginName}").projectDir = androidDir
+                }
+            }
+        }
+    }
+}
+
 include ":app"

@@ -34,6 +34,23 @@ android {
     }
 }
 
-flutter {
-    source rootProject.file('..').absolutePath
+flutter { source '../..' }
+
+// Add all flutter plugin projects as dependencies
+def flutterPluginsFile = new File(rootProject.projectDir.parentFile, '.flutter-plugins')
+if (flutterPluginsFile.exists()) {
+    dependencies {
+        flutterPluginsFile.eachLine { line ->
+            if (line && !line.startsWith('#')) {
+                def parts = line.split('=')
+                if (parts.length == 2) {
+                    def pluginName = parts[0].trim()
+                    def androidDir = new File(parts[1].trim(), 'android')
+                    if (androidDir.exists()) {
+                        implementation project(":${pluginName}")
+                    }
+                }
+            }
+        }
+    }
 }
