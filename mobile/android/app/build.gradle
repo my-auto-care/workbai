@@ -34,4 +34,6 @@ android {
     }
 }
 
-flutter { source '../..' }
+flutter {
+    source rootProject.file('..').absolutePath
+}
