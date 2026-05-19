@@ -1,15 +1,15 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
 def localProperties = new Properties()
 def localPropertiesFile = rootProject.file('local.properties')
 if (localPropertiesFile.exists()) {
     localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
 }
-
 def flutterRoot = localProperties.getProperty('flutter.sdk')
-assert flutterRoot != null, "flutter.sdk not set in local.properties"
-
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
     namespace "ai.workbay.app"
@@ -27,8 +27,8 @@ android {
         applicationId "ai.workbay.app"
         minSdk 24
         targetSdk 35
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
+        versionCode flutter.versionCode
+        versionName flutter.versionName
         manifestPlaceholders += [
             auth0Domain: "dev-bs1544neeany10qn.us.auth0.com",
             auth0Scheme: "workbay",
@@ -44,6 +44,18 @@ android {
     }
 }
 
-flutter {
-    source '../..'
+flutter { source '../..' }
+
+// Explicitly add flutter embedding to Kotlin compile classpath.
+// The plugin should do this but fails with AGP 8 + new plugins DSL.
+afterEvaluate {
+    def embeddingJar = file("${flutterRoot}/bin/cache/artifacts/engine/android-x64/flutter_embedding_debug.jar")
+    if (!embeddingJar.exists()) {
+        embeddingJar = file("${flutterRoot}/bin/cache/artifacts/engine/android-arm64/flutter_embedding_debug.jar")
+    }
+    if (embeddingJar.exists()) {
+        tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+            libraries.from(embeddingJar)
+        }
+    }
 }
