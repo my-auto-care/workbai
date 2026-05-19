@@ -143,7 +143,6 @@ async def entrypoint(ctx: JobContext):
         vad=silero.VAD.load(),
         stt=assemblyai.STT(
             api_key=os.getenv("ASSEMBLYAI_API_KEY"),
-            word_boost=AUTOMOTIVE_TERMS_EN if language == "en" else AUTOMOTIVE_TERMS_ES,
         ),
         llm=lk_anthropic.LLM(
             model="claude-sonnet-4-5",
