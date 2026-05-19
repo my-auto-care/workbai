@@ -90,3 +90,35 @@ class ApiService {
     throw Exception('Failed to load checklists');
   }
 }
+
+  Future<Map<String, dynamic>> getUploadUrl({
+    required String sessionId,
+    required String filename,
+    String contentType = 'image/jpeg',
+  }) async {
+    final r = await http.post(Uri.parse('$kBaseUrl/media/upload-url'), headers: _h,
+        body: jsonEncode({
+          'session_id': sessionId,
+          'filename': filename,
+          'media_type': 'photo',
+          'content_type': contentType,
+        }));
+    if (r.statusCode == 200) return jsonDecode(r.body);
+    throw Exception('Failed to get upload URL: ${r.body}');
+  }
+
+  Future<void> attachMedia({
+    required String sessionId,
+    required String s3Key,
+    String? findingId,
+  }) async {
+    final mediaId = DateTime.now().millisecondsSinceEpoch.toString();
+    final r = await http.post(Uri.parse('$kBaseUrl/media/$mediaId/attach'), headers: _h,
+        body: jsonEncode({
+          'session_id': sessionId,
+          's3_key': s3Key,
+          'media_type': 'photo',
+          if (findingId != null) 'finding_id': findingId,
+        }));
+    if (r.statusCode != 201) throw Exception('Failed to attach media: ${r.body}');
+  }

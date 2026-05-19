@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 import 'package:livekit_client/livekit_client.dart';
 import '../services/api_service.dart';
 import 'session_screen.dart';
@@ -15,9 +19,11 @@ class InspectionScreen extends StatefulWidget {
 class _InspectionScreenState extends State<InspectionScreen> {
   InspectionState _state = InspectionState.connecting;
   Room? _room;
+  EventsListener<RoomEvent>? _listener;
   String? _error;
-  String _transcript = '';
   final List<String> _log = [];
+  bool _photoRequested = false;
+  String? _pendingPhotoItemId;
 
   @override
   void initState() {
@@ -34,8 +40,19 @@ class _InspectionScreenState extends State<InspectionScreen> {
 
       final room = Room();
       _room = room;
+      _listener = room.createListener();
 
-      room.addListener(_onRoomEvent);
+      _listener!.on<DataReceivedEvent>((event) {
+        try {
+          final msg = jsonDecode(utf8.decode(event.data));
+          if (msg['type'] == 'photo_request') {
+            final itemId = msg['item_id'] ?? '';
+            final reason = msg['reason'] ?? 'Photo needed';
+            _addLog('📷 Photo requested: $reason');
+            setState(() { _photoRequested = true; _pendingPhotoItemId = itemId; });
+          }
+        } catch (_) {}
+      });
 
       await room.connect(
         tokenData['livekit_url'],
@@ -44,7 +61,6 @@ class _InspectionScreenState extends State<InspectionScreen> {
       );
 
       await room.localParticipant?.setMicrophoneEnabled(true);
-
       setState(() => _state = InspectionState.active);
       _addLog('Connected — speak to begin inspection');
     } catch (e) {
@@ -52,18 +68,49 @@ class _InspectionScreenState extends State<InspectionScreen> {
     }
   }
 
-  void _onRoomEvent() {
-    // Track data messages from agent (transcripts)
-    _room?.participants.forEach((_, p) {
-      // Data track handling done via event listeners set at connect time
-    });
-  }
-
   void _addLog(String msg) {
     setState(() {
       _log.add(msg);
       if (_log.length > 50) _log.removeAt(0);
     });
+  }
+
+  Future<void> _capturePhoto() async {
+    final picker = ImagePicker();
+    final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+    if (photo == null) return;
+
+    _addLog('📤 Uploading photo...');
+    try {
+      final uploadData = await ApiService().getUploadUrl(
+        sessionId: widget.sessionId,
+        filename: '${_pendingPhotoItemId ?? 'photo'}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+
+      final uploadUrl = uploadData['upload_url'] as String;
+      final s3Key = uploadData['s3_key'] as String;
+
+      final bytes = await File(photo.path).readAsBytes();
+      final uploadResp = await http.put(
+        Uri.parse(uploadUrl),
+        headers: {'Content-Type': 'image/jpeg'},
+        body: bytes,
+      );
+
+      if (uploadResp.statusCode == 200 || uploadResp.statusCode == 204) {
+        await ApiService().attachMedia(
+          sessionId: widget.sessionId,
+          s3Key: s3Key,
+        );
+        _addLog('✅ Photo uploaded');
+      } else {
+        _addLog('⚠️ Photo upload failed (${uploadResp.statusCode})');
+      }
+    } catch (e) {
+      _addLog('⚠️ Photo error: $e');
+    }
+
+    setState(() { _photoRequested = false; _pendingPhotoItemId = null; });
   }
 
   Future<void> _complete() async {
@@ -85,7 +132,7 @@ class _InspectionScreenState extends State<InspectionScreen> {
 
   @override
   void dispose() {
-    _room?.removeListener(_onRoomEvent);
+    _listener?.dispose();
     _room?.disconnect();
     super.dispose();
   }
@@ -104,7 +151,6 @@ class _InspectionScreenState extends State<InspectionScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(children: [
-            // Status indicator
             _StatusBadge(state: _state),
             const SizedBox(height: 24),
 
@@ -115,13 +161,31 @@ class _InspectionScreenState extends State<InspectionScreen> {
               const SizedBox(height: 16),
               ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Go Back')),
             ] else ...[
-              // Mic visual
-              if (_state == InspectionState.active)
-                const _PulsingMic(),
+              if (_state == InspectionState.active) const _PulsingMic(),
+              const SizedBox(height: 16),
 
-              const SizedBox(height: 24),
+              // Photo request banner
+              if (_photoRequested)
+                GestureDetector(
+                  onTap: _capturePhoto,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E3A5F),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF3B82F6), width: 1.5),
+                    ),
+                    child: const Row(children: [
+                      Icon(Icons.camera_alt, color: Color(0xFF3B82F6)),
+                      SizedBox(width: 12),
+                      Expanded(child: Text('Tap to take photo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
+                      Icon(Icons.chevron_right, color: Color(0xFF6B7280)),
+                    ]),
+                  ),
+                ),
 
-              // Transcript log
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(16),
@@ -146,7 +210,6 @@ class _InspectionScreenState extends State<InspectionScreen> {
 
               const SizedBox(height: 24),
 
-              // Complete button
               if (_state == InspectionState.active)
                 SizedBox(
                   width: double.infinity,
