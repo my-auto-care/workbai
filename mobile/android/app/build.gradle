@@ -1,12 +1,11 @@
 plugins {
     id "com.android.application"
-    id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
 }
 
 android {
     namespace "ai.workbay.app"
-    compileSdk flutter.compileSdkVersion
+    compileSdk 35
     ndkVersion "27.0.12077973"
 
     compileOptions {
@@ -14,14 +13,10 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
-
     defaultConfig {
         applicationId "ai.workbay.app"
-        minSdkVersion flutter.minSdkVersion
-        targetSdkVersion flutter.targetSdkVersion
+        minSdk 24
+        targetSdk 35
         versionCode flutter.versionCode
         versionName flutter.versionName
         manifestPlaceholders += [
@@ -34,6 +29,7 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.debug
+            minifyEnabled false
         }
     }
 }
