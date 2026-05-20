@@ -1,7 +1,13 @@
-plugins {
-    id "com.android.application"
-    id "dev.flutter.flutter-gradle-plugin"
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
 }
+def flutterRoot = localProperties.getProperty('flutter.sdk')
+assert flutterRoot != null, "flutter.sdk not set in local.properties"
+
+apply plugin: 'com.android.application'
+apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
     namespace "ai.workbay.app"
@@ -35,48 +41,3 @@ android {
 }
 
 flutter { source '../..' }
-
-// Add all flutter plugin projects as dependencies
-def flutterPluginsFile = new File(rootProject.projectDir.parentFile, '.flutter-plugins')
-if (flutterPluginsFile.exists()) {
-    dependencies {
-        flutterPluginsFile.eachLine { line ->
-            if (line && !line.startsWith('#')) {
-                def parts = line.split('=')
-                if (parts.length == 2) {
-                    def pluginName = parts[0].trim()
-                    def androidDir = new File(parts[1].trim(), 'android')
-                    if (androidDir.exists()) {
-                        implementation project(":${pluginName}")
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Patch flutter_webrtc SurfaceTextureRenderer before compilation
-// Replaces broken onSurfaceDestroyed with onSurfaceCleanup for compileSdk 35
-tasks.register('patchFlutterWebRTC') {
-    doLast {
-        def pubCache = System.getenv('LOCALAPPDATA')
-            ? "${System.getenv('LOCALAPPDATA')}\\Pub\\Cache\\hosted\\pub.dev"
-            : "${System.getProperty('user.home')}/.pub-cache/hosted/pub.dev"
-        def versions = ['0.13.1', '0.13.1+hotfix.1', '0.14.0', '0.14.1', '0.14.2']
-        versions.each { ver ->
-            def target = new File("${pubCache}/flutter_webrtc-${ver}/android/src/main/java/com/cloudwebrtc/webrtc/SurfaceTextureRenderer.java")
-            if (target.exists()) {
-                def content = target.text
-                if (content.contains('onSurfaceDestroyed')) {
-                    target.text = content.replace('onSurfaceDestroyed', 'onSurfaceCleanup')
-                    println "Patched: ${target.absolutePath}"
-                }
-            }
-        }
-    }
-}
-afterEvaluate {
-    tasks.matching { it.name.startsWith('compile') && it.name.contains('Java') }.configureEach {
-        dependsOn 'patchFlutterWebRTC'
-    }
-}
