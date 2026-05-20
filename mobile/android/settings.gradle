@@ -18,12 +18,7 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
 }
 
-// rootProject.projectDir = android/
-// parentFile = mobile/  <-- where .flutter-plugins lives
 def flutterPluginsFile = new File(rootProject.projectDir.parentFile, '.flutter-plugins')
-println "Looking for .flutter-plugins at: ${flutterPluginsFile.absolutePath}"
-println "File exists: ${flutterPluginsFile.exists()}"
-
 if (flutterPluginsFile.exists()) {
     flutterPluginsFile.eachLine { line ->
         if (line && !line.startsWith('#')) {
@@ -32,10 +27,28 @@ if (flutterPluginsFile.exists()) {
                 def pluginName = line.substring(0, eqIdx).trim()
                 def pluginPath = line.substring(eqIdx + 1).trim()
                 def androidDir = new File(pluginPath, 'android')
-                println "Plugin: ${pluginName} -> ${androidDir.absolutePath} exists=${androidDir.exists()}"
                 if (androidDir.exists()) {
                     include ":${pluginName}"
                     project(":${pluginName}").projectDir = androidDir
+
+                    // Patch flutter_webrtc SurfaceTextureRenderer to fix
+                    // onSurfaceDestroyed -> onSurfaceCleanup for compileSdk 35
+                    if (pluginName == 'flutter_webrtc') {
+                        def rendererFile = new File(pluginPath,
+                            'android/src/main/java/com/cloudwebrtc/webrtc/SurfaceTextureRenderer.java')
+                        if (rendererFile.exists()) {
+                            def content = rendererFile.text
+                            if (content.contains('onSurfaceDestroyed')) {
+                                content = content.replace(
+                                    'public void onSurfaceDestroyed() {',
+                                    'public void onSurfaceCleanup() {'
+                                )
+                                // Also add onSurfaceDestroyed as no-op if needed by older SDKs
+                                rendererFile.text = content
+                                println "Patched flutter_webrtc SurfaceTextureRenderer: onSurfaceDestroyed -> onSurfaceCleanup"
+                            }
+                        }
+                    }
                 }
             }
         }
