@@ -21,7 +21,7 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 
 class WorkbayInspectionAgent(Agent):
-    def __init__(self, session_id: str, language: str = "en"):
+    def __init__(self, session_id: str, language: str = "en", room=None):
         prompt = (SYSTEM_PROMPT_EN if language == "en" else SYSTEM_PROMPT_ES).replace(
             "Current session context will be injected at runtime.",
             f"Session ID: {session_id}"
@@ -30,6 +30,7 @@ class WorkbayInspectionAgent(Agent):
         self.session_id = session_id
         self.language = language
         self._item_index = 0
+        self._room = room
         self._checklist_items = []
 
     async def on_enter(self):
