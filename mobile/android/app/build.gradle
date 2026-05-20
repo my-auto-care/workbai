@@ -1,7 +1,12 @@
-plugins {
-    id "com.android.application"
-    id "dev.flutter.flutter-gradle-plugin"
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
 }
+def flutterRoot = localProperties.getProperty('flutter.sdk')
+assert flutterRoot != null, 'Flutter SDK not found'
+apply plugin: 'com.android.application'
+apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
     namespace "ai.workbay.app"
@@ -30,10 +35,10 @@ android {
         release {
             signingConfig signingConfigs.debug
             minifyEnabled false
+            shrinkResources false
         }
     }
 }
 
-flutter {
-    source "../.."
-}
+
+
