@@ -1,48 +1,21 @@
-def flutterSdkPath = {
-    def properties = new Properties()
-    file("local.properties").withInputStream { properties.load(it) }
-    def flutterSdkPath = properties.getProperty("flutter.sdk")
-    assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-    return flutterSdkPath
-}()
-
-// Patch flutter_webrtc before any project evaluation
-def pubCacheBase = System.getenv('LOCALAPPDATA')
-    ? new File(System.getenv('LOCALAPPDATA'), 'Pub\\Cache\\hosted\\pub.dev')
-    : new File(System.getProperty('user.home'), '.pub-cache/hosted/pub.dev')
-
-['0.13.1', '0.13.1+hotfix.1', '0.14.0', '0.14.1', '0.14.2'].each { ver ->
-    def f = new File(pubCacheBase,
-        "flutter_webrtc-${ver}/android/src/main/java/com/cloudwebrtc/webrtc/SurfaceTextureRenderer.java")
-    if (f.exists()) {
-        def txt = f.text
-        if (txt.contains('onSurfaceDestroyed')) {
-            f.text = txt.replace('onSurfaceDestroyed', 'onSurfaceCleanup')
-            println ">>> Patched flutter_webrtc ${ver}"
-        } else {
-            println ">>> flutter_webrtc ${ver}: already patched"
-        }
+pluginManagement {
+    def flutterSdkPath = {
+        def properties = new Properties()
+        file("local.properties").withInputStream { properties.load(it) }
+        def flutterSdkPath = properties.getProperty("flutter.sdk")
+        assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+        return flutterSdkPath
+    }()
+    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
     }
 }
 
-apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
-
-def flutterPluginsFile = new File(rootProject.projectDir.parentFile, '.flutter-plugins')
-if (flutterPluginsFile.exists()) {
-    flutterPluginsFile.eachLine { line ->
-        if (line && !line.startsWith('#')) {
-            def eqIdx = line.indexOf('=')
-            if (eqIdx > 0) {
-                def pluginName = line.substring(0, eqIdx).trim()
-                def pluginPath = line.substring(eqIdx + 1).trim()
-                def androidDir = new File(pluginPath, 'android')
-                if (androidDir.exists()) {
-                    include ":${pluginName}"
-                    project(":${pluginName}").projectDir = androidDir
-                }
-            }
-        }
-    }
+plugins {
+    id "dev.flutter.flutter-gradle-plugin" version "1.0.0" apply false
 }
 
 include ":app"

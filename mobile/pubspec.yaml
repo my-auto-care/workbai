@@ -18,11 +18,6 @@ dependencies:
   uuid: ^4.4.0
   cupertino_icons: ^1.0.8
 
-dependency_overrides:
-  # 0.13.1 fixes onSurfaceDestroyed Android compile error (SDK 35)
-  # without bumping path dependency beyond what Flutter 3.27.4 ships
-  flutter_webrtc: 0.13.1
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
