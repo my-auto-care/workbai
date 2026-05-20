@@ -1,20 +1,22 @@
-plugins {
-    id "com.android.application"
-    id "kotlin-android"
-    id "dev.flutter.flutter-gradle-plugin"
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
 }
+def flutterRoot = localProperties.getProperty('flutter.sdk')
+assert flutterRoot != null, 'Flutter SDK not found'
+apply plugin: 'com.android.application'
+apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
     namespace "ai.workbay.app"
     compileSdk 35
-    ndkVersion "25.1.8937393"
+    ndkVersion "27.0.12077973"
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
-
-    kotlinOptions { jvmTarget = '17' }
 
     defaultConfig {
         applicationId "ai.workbay.app"
@@ -33,8 +35,10 @@ android {
         release {
             signingConfig signingConfigs.debug
             minifyEnabled false
+            shrinkResources false
         }
     }
 }
 
-flutter { source '../..' }
+
+
