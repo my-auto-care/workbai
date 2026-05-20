@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:livekit_client/livekit_client.dart';
@@ -24,6 +25,8 @@ class _InspectionScreenState extends State<InspectionScreen> {
   final List<String> _log = [];
   bool _photoRequested = false;
   String? _pendingPhotoItemId;
+  String? _pendingPhotoReason;
+  bool _isCapturingPhoto = false;
 
   @override
   void initState() {
@@ -48,8 +51,16 @@ class _InspectionScreenState extends State<InspectionScreen> {
           if (msg['type'] == 'photo_request') {
             final itemId = msg['item_id'] ?? '';
             final reason = msg['reason'] ?? 'Photo needed';
-            _addLog('📷 Photo requested: $reason');
-            setState(() { _photoRequested = true; _pendingPhotoItemId = itemId; });
+            final isAuto = msg['auto'] == true;
+            _addLog('📷 ${isAuto ? "Auto photo" : "Photo"}: $reason');
+            setState(() {
+              _photoRequested = true;
+              _pendingPhotoItemId = itemId;
+              _pendingPhotoReason = reason;
+            });
+            if (isAuto) {
+              _handleAutoPhotoRequest();
+            }
           }
         } catch (_) {}
       });
@@ -75,10 +86,34 @@ class _InspectionScreenState extends State<InspectionScreen> {
     });
   }
 
-  Future<void> _capturePhoto() async {
+  /// Called when the agent auto-detects an issue — vibrate and open camera immediately
+  Future<void> _handleAutoPhotoRequest() async {
+    if (_isCapturingPhoto) return;
+    // Vibrate to alert the technician hands-free
+    HapticFeedback.heavyImpact();
+    await Future.delayed(const Duration(milliseconds: 300));
+    HapticFeedback.heavyImpact();
+    await Future.delayed(const Duration(milliseconds: 300));
+    HapticFeedback.heavyImpact();
+    // Small delay so the vibration registers before camera opens
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) {
+      await _capturePhoto(auto: true);
+    }
+  }
+
+  Future<void> _capturePhoto({bool auto = false}) async {
+    if (_isCapturingPhoto) return;
+    setState(() => _isCapturingPhoto = true);
+
     final picker = ImagePicker();
     final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
-    if (photo == null) return;
+
+    if (photo == null) {
+      // User cancelled — keep banner visible so they can tap manually
+      setState(() => _isCapturingPhoto = false);
+      return;
+    }
 
     _addLog('📤 Uploading photo...');
     try {
@@ -103,6 +138,7 @@ class _InspectionScreenState extends State<InspectionScreen> {
           s3Key: s3Key,
         );
         _addLog('✅ Photo uploaded');
+        HapticFeedback.lightImpact();
       } else {
         _addLog('⚠️ Photo upload failed (${uploadResp.statusCode})');
       }
@@ -110,7 +146,12 @@ class _InspectionScreenState extends State<InspectionScreen> {
       _addLog('⚠️ Photo error: $e');
     }
 
-    setState(() { _photoRequested = false; _pendingPhotoItemId = null; });
+    setState(() {
+      _photoRequested = false;
+      _pendingPhotoItemId = null;
+      _pendingPhotoReason = null;
+      _isCapturingPhoto = false;
+    });
   }
 
   Future<void> _complete() async {
@@ -164,26 +205,53 @@ class _InspectionScreenState extends State<InspectionScreen> {
               if (_state == InspectionState.active) const _PulsingMic(),
               const SizedBox(height: 16),
 
-              // Photo request banner
-              if (_photoRequested)
+              // Photo request banner — shown for manual requests or if auto-capture was cancelled
+              if (_photoRequested && !_isCapturingPhoto)
                 GestureDetector(
-                  onTap: _capturePhoto,
+                  onTap: () => _capturePhoto(),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E3A5F),
+                      color: const Color(0xFF7F1D1D),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF3B82F6), width: 1.5),
+                      border: Border.all(color: const Color(0xFFEF4444), width: 2),
                     ),
-                    child: const Row(children: [
-                      Icon(Icons.camera_alt, color: Color(0xFF3B82F6)),
-                      SizedBox(width: 12),
-                      Expanded(child: Text('Tap to take photo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
-                      Icon(Icons.chevron_right, color: Color(0xFF6B7280)),
+                    child: Row(children: [
+                      const Icon(Icons.camera_alt, color: Color(0xFFEF4444), size: 28),
+                      const SizedBox(width: 12),
+                      Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('⚠️ Issue Detected — Photo Required',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+                          if (_pendingPhotoReason != null)
+                            Text(_pendingPhotoReason!,
+                                style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12)),
+                        ],
+                      )),
+                      const Icon(Icons.chevron_right, color: Color(0xFF9CA3AF)),
                     ]),
                   ),
+                ),
+
+              // Capturing indicator
+              if (_isCapturingPhoto)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E3A5F),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF3B82F6), width: 1.5),
+                  ),
+                  child: const Row(children: [
+                    SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3B82F6))),
+                    SizedBox(width: 12),
+                    Text('Uploading photo...', style: TextStyle(color: Colors.white)),
+                  ]),
                 ),
 
               Expanded(

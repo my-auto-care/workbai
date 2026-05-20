@@ -58,6 +58,22 @@ class WorkbayInspectionAgent(Agent):
         except Exception as e:
             logger.warning(f"Could not load checklist: {e}")
 
+    async def _send_photo_request(self, item_id: str, reason: str, auto: bool = False):
+        """Send photo request data message to mobile app."""
+        if self._room:
+            try:
+                payload = json.dumps({
+                    "type": "photo_request",
+                    "item_id": item_id,
+                    "reason": reason,
+                    "session_id": self.session_id,
+                    "auto": auto,
+                }).encode()
+                await self._room.local_participant.publish_data(payload, reliable=True)
+                logger.info(f"Photo request sent for {item_id} (auto={auto}): {reason}")
+            except Exception as e:
+                logger.warning(f"Failed to send photo request: {e}")
+
     @function_tool
     async def save_finding(
         self,
@@ -66,7 +82,7 @@ class WorkbayInspectionAgent(Agent):
         condition: Annotated[str, "Condition: good, fair, poor, or na"],
         structured_data: Annotated[dict, "Any extracted measurements or ratings"] = {},
     ) -> str:
-        """Save a technician finding for a checklist item to the database."""
+        """Save a technician finding for a checklist item to the database. Automatically requests a photo if condition is poor or fair."""
         try:
             async with httpx.AsyncClient(base_url=BACKEND_URL, timeout=10.0) as client:
                 r = await client.post(f"/sessions/{self.session_id}/findings", json={
@@ -76,7 +92,16 @@ class WorkbayInspectionAgent(Agent):
                     "structured_data": structured_data,
                 })
                 if r.status_code == 201:
-                    return f"Finding saved for {item_id}: {condition}"
+                    result = f"Finding saved for {item_id}: {condition}"
+                    # Auto-request photo whenever an issue is detected (poor or fair)
+                    if condition in ("poor", "fair"):
+                        await self._send_photo_request(
+                            item_id,
+                            f"Issue detected ({condition} condition) — photo required for documentation",
+                            auto=True,
+                        )
+                        result += ". Photo automatically requested."
+                    return result
                 return f"Error saving finding: {r.status_code}"
         except Exception as e:
             return f"Error: {e}"
@@ -116,14 +141,8 @@ class WorkbayInspectionAgent(Agent):
         reason: Annotated[str, "Why a photo is needed"],
     ) -> str:
         """Signal the mobile app that a photo is needed for this item."""
-        logger.info(f"Photo requested for item {item_id}: {reason}")
-        if self._room:
-            try:
-                payload = json.dumps({"type": "photo_request", "item_id": item_id, "reason": reason, "session_id": self.session_id}).encode()
-                await self._room.local_participant.publish_data(payload, reliable=True)
-                logger.info(f"Photo request data message sent for {item_id}")
-            except Exception as e:
-                logger.warning(f"Failed to send photo request data message: {e}")
+        logger.info(f"Manual photo requested for item {item_id}: {reason}")
+        await self._send_photo_request(item_id, reason, auto=False)
         return f"Photo request sent for {item_id}. Waiting for technician to capture image."
 
     @function_tool
