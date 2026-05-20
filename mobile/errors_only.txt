@@ -1,0 +1,465 @@
+﻿
+[ +391 ms] Tasks to be executed: [task ':app:preBuild', task ':app:preReleaseBuild', task 
+':app:javaPreCompileRelease', task ':app:compileFlutterBuildRelease', task ':app:packJniLibsflutterBuildRelease', task 
+':auth0_flutter:preBuild', task ':auth0_flutter:preReleaseBuild', task ':auth0_flutter:writeReleaseAarMetadata', task 
+':connectivity_plus:preBuild', task ':connectivity_plus:preReleaseBuild', task 
+':connectivity_plus:writeReleaseAarMetadata', task ':device_info_plus:preBuild', task 
+':device_info_plus:preReleaseBuild', task ':device_info_plus:writeReleaseAarMetadata', task 
+':flutter_plugin_android_lifecycle:preBuild', task ':flutter_plugin_android_lifecycle:preReleaseBuild', task 
+':flutter_plugin_android_lifecycle:writeReleaseAarMetadata', task ':flutter_webrtc:preBuild', task 
+':flutter_webrtc:preReleaseBuild', task ':flutter_webrtc:writeReleaseAarMetadata', task 
+':image_picker_android:preBuild', task ':image_picker_android:preReleaseBuild', task 
+':image_picker_android:writeReleaseAarMetadata', task ':livekit_client:preBuild', task 
+':livekit_client:preReleaseBuild', task ':livekit_client:writeReleaseAarMetadata', task 
+':path_provider_android:preBuild', task ':path_provider_android:preReleaseBuild', task 
+':path_provider_android:writeReleaseAarMetadata', task ':shared_preferences_android:preBuild', task 
+':shared_preferences_android:preReleaseBuild', task ':shared_preferences_android:writeReleaseAarMetadata', task 
+':app:checkReleaseAarMetadata', task ':app:cleanMergeReleaseAssets', task ':app:mergeReleaseShaders', task 
+':app:compileReleaseShaders', task ':app:generateReleaseAssets', task ':auth0_flutter:mergeReleaseShaders', task 
+':auth0_flutter:compileReleaseShaders', task ':auth0_flutter:generateReleaseAssets', task 
+':auth0_flutter:packageReleaseAssets', task ':connectivity_plus:mergeReleaseShaders', task 
+':connectivity_plus:compileReleaseShaders', task ':connectivity_plus:generateReleaseAssets', task 
+':connectivity_plus:packageReleaseAssets', task ':device_info_plus:mergeReleaseShaders', task 
+':device_info_plus:compileReleaseShaders', task ':device_info_plus:generateReleaseAssets', task 
+':device_info_plus:packageReleaseAssets', task ':flutter_plugin_android_lifecycle:mergeReleaseShaders', task 
+':flutter_plugin_android_lifecycle:compileReleaseShaders', task 
+':flutter_plugin_android_lifecycle:generateReleaseAssets', task 
+':flutter_plugin_android_lifecycle:packageReleaseAssets', task ':flutter_webrtc:mergeReleaseShaders', task 
+':flutter_webrtc:compileReleaseShaders', task ':flutter_webrtc:generateReleaseAssets', task 
+':flutter_webrtc:packageReleaseAssets', task ':image_picker_android:mergeReleaseShaders', task 
+':image_picker_android:compileReleaseShaders', task ':image_picker_android:generateReleaseAssets', task 
+':image_picker_android:packageReleaseAssets', task ':livekit_client:mergeReleaseShaders', task 
+':livekit_client:compileReleaseShaders', task ':livekit_client:generateReleaseAssets', task 
+':livekit_client:packageReleaseAssets', task ':path_provider_android:mergeReleaseShaders', task 
+':path_provider_android:compileReleaseShaders', task ':path_provider_android:generateReleaseAssets', task 
+':path_provider_android:packageReleaseAssets', task ':shared_preferences_android:mergeReleaseShaders', task 
+':shared_preferences_android:compileReleaseShaders', task ':shared_preferences_android:generateReleaseAssets', task 
+':shared_preferences_android:packageReleaseAssets', task ':app:mergeReleaseAssets', task 
+':app:copyFlutterAssetsRelease', task ':app:generateReleaseResValues', task ':auth0_flutter:generateReleaseResValues', 
+task ':auth0_flutter:generateReleaseResources', task ':auth0_flutter:packageReleaseResources', task 
+':connectivity_plus:generateReleaseResValues', task ':connectivity_plus:generateReleaseResources', task 
+':connectivity_plus:packageReleaseResources', task ':device_info_plus:generateReleaseResValues', task 
+':device_info_plus:generateReleaseResources', task ':device_info_plus:packageReleaseResources', task 
+':flutter_plugin_android_lifecycle:generateReleaseResValues', task 
+':flutter_plugin_android_lifecycle:generateReleaseResources', task 
+':flutter_plugin_android_lifecycle:packageReleaseResources', task ':flutter_webrtc:generateReleaseResValues', task 
+':flutter_webrtc:generateReleaseResources', task ':flutter_webrtc:packageReleaseResources', task 
+':image_picker_android:generateReleaseResValues', task ':image_picker_android:generateReleaseResources', task 
+':image_picker_android:packageReleaseResources', task ':livekit_client:generateReleaseResValues', task 
+':livekit_client:generateReleaseResources', task ':livekit_client:packageReleaseResources', task 
+':path_provider_android:generateReleaseResValues', task ':path_provider_android:generateReleaseResources', task 
+':path_provider_android:packageReleaseResources', task ':shared_preferences_android:generateReleaseResValues', task 
+':shared_preferences_android:generateReleaseResources', task ':shared_preferences_android:packageReleaseResources', 
+task ':app:mapReleaseSourceSetPaths', task ':app:generateReleaseResources', task ':app:mergeReleaseResources', task 
+':app:packageReleaseResources', task ':app:parseReleaseLocalResources', task 
+':app:createReleaseCompatibleScreenManifests', task ':app:extractDeepLinksRelease', task 
+':auth0_flutter:extractDeepLinksRelease', task ':auth0_flutter:processReleaseManifest', task 
+':connectivity_plus:extractDeepLinksRelease', task ':connectivity_plus:processReleaseManifest', task 
+':device_info_plus:extractDeepLinksRelease', task ':device_info_plus:processReleaseManifest', task 
+':flutter_plugin_android_lifecycle:extractDeepLinksRelease', task 
+':flutter_plugin_android_lifecycle:processReleaseManifest', task ':flutter_webrtc:extractDeepLinksRelease', task 
+':flutter_webrtc:processReleaseManifest', task ':image_picker_android:extractDeepLinksRelease', task 
+':image_picker_android:processReleaseManifest', task ':livekit_client:extractDeepLinksRelease', task 
+':livekit_client:processReleaseManifest', task ':path_provider_android:extractDeepLinksRelease', task 
+':path_provider_android:processReleaseManifest', task ':shared_preferences_android:extractDeepLinksRelease', task 
+':shared_preferences_android:processReleaseManifest', task ':app:processReleaseMainManifest', task 
+':app:processReleaseManifest', task ':app:processReleaseManifestForPackage', task 
+':auth0_flutter:compileReleaseLibraryResources', task ':auth0_flutter:parseReleaseLocalResources', task 
+':auth0_flutter:generateReleaseRFile', task ':connectivity_plus:compileReleaseLibraryResources', task 
+':connectivity_plus:parseReleaseLocalResources', task ':connectivity_plus:generateReleaseRFile', task 
+':device_info_plus:compileReleaseLibraryResources', task ':device_info_plus:parseReleaseLocalResources', task 
+':device_info_plus:generateReleaseRFile', task ':flutter_plugin_android_lifecycle:compileReleaseLibraryResources', 
+task ':flutter_plugin_android_lifecycle:parseReleaseLocalResources', task 
+':flutter_plugin_android_lifecycle:generateReleaseRFile', task ':flutter_webrtc:compileReleaseLibraryResources', task 
+':flutter_webrtc:parseReleaseLocalResources', task ':flutter_webrtc:generateReleaseRFile', task 
+':image_picker_android:compileReleaseLibraryResources', task ':image_picker_android:parseReleaseLocalResources', task 
+':image_picker_android:generateReleaseRFile', task ':livekit_client:compileReleaseLibraryResources', task 
+':livekit_client:parseReleaseLocalResources', task ':livekit_client:generateReleaseRFile', task 
+':path_provider_android:compileReleaseLibraryResources', task ':path_provider_android:parseReleaseLocalResources', 
+task ':path_provider_android:generateReleaseRFile', task ':shared_preferences_android:compileReleaseLibraryResources', 
+task ':shared_preferences_android:parseReleaseLocalResources', task 
+':shared_preferences_android:generateReleaseRFile', task ':app:processReleaseResources', task 
+':auth0_flutter:compileReleaseKotlin', task ':auth0_flutter:javaPreCompileRelease', task 
+':auth0_flutter:compileReleaseJavaWithJavac', task ':auth0_flutter:bundleLibCompileToJarRelease', task 
+':connectivity_plus:javaPreCompileRelease', task ':connectivity_plus:compileReleaseJavaWithJavac', task 
+':connectivity_plus:bundleLibCompileToJarRelease', task ':device_info_plus:compileReleaseKotlin', task 
+':device_info_plus:javaPreCompileRelease', task ':device_info_plus:compileReleaseJavaWithJavac', task 
+':device_info_plus:bundleLibCompileToJarRelease', task ':flutter_plugin_android_lifecycle:javaPreCompileRelease', task 
+':flutter_plugin_android_lifecycle:compileReleaseJavaWithJavac', task 
+':flutter_plugin_android_lifecycle:bundleLibCompileToJarRelease', task ':flutter_webrtc:compileReleaseKotlin', task 
+':flutter_webrtc:javaPreCompileRelease', task ':flutter_webrtc:compileReleaseJavaWithJavac', task 
+':flutter_webrtc:bundleLibCompileToJarRelease', task ':image_picker_android:javaPreCompileRelease', task 
+':image_picker_android:compileReleaseJavaWithJavac', task ':image_picker_android:bundleLibCompileToJarRelease', task 
+':livekit_client:compileReleaseKotlin', task ':livekit_client:javaPreCompileRelease', task 
+':livekit_client:compileReleaseJavaWithJavac', task ':livekit_client:bundleLibCompileToJarRelease', task 
+':path_provider_android:javaPreCompileRelease', task ':path_provider_android:compileReleaseJavaWithJavac', task 
+':path_provider_android:bundleLibCompileToJarRelease', task ':shared_preferences_android:compileReleaseKotlin', task 
+':shared_preferences_android:javaPreCompileRelease', task ':shared_preferences_android:compileReleaseJavaWithJavac', 
+task ':shared_preferences_android:bundleLibCompileToJarRelease', task ':app:compileReleaseJavaWithJavac', task 
+':app:extractProguardFiles', task ':auth0_flutter:bundleLibRuntimeToJarRelease', task 
+':auth0_flutter:processReleaseJavaRes', task ':auth0_flutter:createFullJarRelease', task 
+':auth0_flutter:mergeReleaseJniLibFolders', task ':auth0_flutter:mergeReleaseNativeLibs', task 
+':auth0_flutter:stripReleaseDebugSymbols', task ':auth0_flutter:copyReleaseJniLibsProjectAndLocalJars', task 
+':auth0_flutter:extractDeepLinksForAarRelease', task ':auth0_flutter:extractReleaseAnnotations', task 
+':auth0_flutter:mergeReleaseGeneratedProguardFiles', task ':auth0_flutter:mergeReleaseConsumerProguardFiles', task 
+':auth0_flutter:prepareLintJarForPublish', task ':auth0_flutter:prepareReleaseArtProfile', task 
+':auth0_flutter:mergeReleaseJavaResource', task ':auth0_flutter:syncReleaseLibJars', task 
+':auth0_flutter:bundleReleaseLocalLintAar', task ':auth0_flutter:extractProguardFiles', task 
+':auth0_flutter:writeReleaseLintModelMetadata', task ':auth0_flutter:generateReleaseLintModel', task 
+':connectivity_plus:bundleLibRuntimeToJarRelease', task ':connectivity_plus:processReleaseJavaRes', task 
+':connectivity_plus:createFullJarRelease', task ':connectivity_plus:mergeReleaseJniLibFolders', task 
+':connectivity_plus:mergeReleaseNativeLibs', task ':connectivity_plus:stripReleaseDebugSymbols', task 
+':connectivity_plus:copyReleaseJniLibsProjectAndLocalJars', task ':connectivity_plus:extractDeepLinksForAarRelease', 
+task ':connectivity_plus:extractReleaseAnnotations', task ':connectivity_plus:mergeReleaseGeneratedProguardFiles', 
+task ':connectivity_plus:mergeReleaseConsumerProguardFiles', task ':connectivity_plus:prepareLintJarForPublish', task 
+':connectivity_plus:prepareReleaseArtProfile', task ':connectivity_plus:mergeReleaseJavaResource', task 
+':connectivity_plus:syncReleaseLibJars', task ':connectivity_plus:bundleReleaseLocalLintAar', task 
+':connectivity_plus:extractProguardFiles', task ':connectivity_plus:writeReleaseLintModelMetadata', task 
+':connectivity_plus:generateReleaseLintModel', task ':device_info_plus:bundleLibRuntimeToJarRelease', task 
+':device_info_plus:processReleaseJavaRes', task ':device_info_plus:createFullJarRelease', task 
+':device_info_plus:mergeReleaseJniLibFolders', task ':device_info_plus:mergeReleaseNativeLibs', task 
+':device_info_plus:stripReleaseDebugSymbols', task ':device_info_plus:copyReleaseJniLibsProjectAndLocalJars', task 
+':device_info_plus:extractDeepLinksForAarRelease', task ':device_info_plus:extractReleaseAnnotations', task 
+':device_info_plus:mergeReleaseGeneratedProguardFiles', task ':device_info_plus:mergeReleaseConsumerProguardFiles', 
+task ':device_info_plus:prepareLintJarForPublish', task ':device_info_plus:prepareReleaseArtProfile', task 
+':device_info_plus:mergeReleaseJavaResource', task ':device_info_plus:syncReleaseLibJars', task 
+':device_info_plus:bundleReleaseLocalLintAar', task ':device_info_plus:extractProguardFiles', task 
+':device_info_plus:writeReleaseLintModelMetadata', task ':device_info_plus:generateReleaseLintModel', task 
+':flutter_plugin_android_lifecycle:bundleLibRuntimeToJarRelease', task 
+':flutter_plugin_android_lifecycle:processReleaseJavaRes', task 
+':flutter_plugin_android_lifecycle:createFullJarRelease', task 
+':flutter_plugin_android_lifecycle:mergeReleaseJniLibFolders', task 
+':flutter_plugin_android_lifecycle:mergeReleaseNativeLibs', task 
+':flutter_plugin_android_lifecycle:stripReleaseDebugSymbols', task 
+':flutter_plugin_android_lifecycle:copyReleaseJniLibsProjectAndLocalJars', task 
+':flutter_plugin_android_lifecycle:extractDeepLinksForAarRelease', task 
+':flutter_plugin_android_lifecycle:extractReleaseAnnotations', task 
+':flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFiles', task 
+':flutter_plugin_android_lifecycle:mergeReleaseConsumerProguardFiles', task 
+':flutter_plugin_android_lifecycle:prepareLintJarForPublish', task 
+':flutter_plugin_android_lifecycle:prepareReleaseArtProfile', task 
+':flutter_plugin_android_lifecycle:mergeReleaseJavaResource', task 
+':flutter_plugin_android_lifecycle:syncReleaseLibJars', task 
+':flutter_plugin_android_lifecycle:bundleReleaseLocalLintAar', task 
+':flutter_plugin_android_lifecycle:extractProguardFiles', task 
+':flutter_plugin_android_lifecycle:writeReleaseLintModelMetadata', task 
+':flutter_plugin_android_lifecycle:generateReleaseLintModel', task ':flutter_webrtc:bundleLibRuntimeToJarRelease', 
+task ':flutter_webrtc:processReleaseJavaRes', task ':flutter_webrtc:createFullJarRelease', task 
+':flutter_webrtc:mergeReleaseJniLibFolders', task ':flutter_webrtc:mergeReleaseNativeLibs', task 
+':flutter_webrtc:stripReleaseDebugSymbols', task ':flutter_webrtc:copyReleaseJniLibsProjectAndLocalJars', task 
+':flutter_webrtc:extractDeepLinksForAarRelease', task ':flutter_webrtc:extractReleaseAnnotations', task 
+':flutter_webrtc:mergeReleaseGeneratedProguardFiles', task ':flutter_webrtc:mergeReleaseConsumerProguardFiles', task 
+':flutter_webrtc:prepareLintJarForPublish', task ':flutter_webrtc:prepareReleaseArtProfile', task 
+':flutter_webrtc:mergeReleaseJavaResource', task ':flutter_webrtc:syncReleaseLibJars', task 
+':flutter_webrtc:bundleReleaseLocalLintAar', task ':flutter_webrtc:extractProguardFiles', task 
+':flutter_webrtc:writeReleaseLintModelMetadata', task ':flutter_webrtc:generateReleaseLintModel', task 
+':image_picker_android:bundleLibRuntimeToJarRelease', task ':image_picker_android:processReleaseJavaRes', task 
+':image_picker_android:createFullJarRelease', task ':image_picker_android:mergeReleaseJniLibFolders', task 
+':image_picker_android:mergeReleaseNativeLibs', task ':image_picker_android:stripReleaseDebugSymbols', task 
+':image_picker_android:copyReleaseJniLibsProjectAndLocalJars', task 
+':image_picker_android:extractDeepLinksForAarRelease', task ':image_picker_android:extractReleaseAnnotations', task 
+':image_picker_android:mergeReleaseGeneratedProguardFiles', task 
+':image_picker_android:mergeReleaseConsumerProguardFiles', task ':image_picker_android:prepareLintJarForPublish', task 
+':image_picker_android:prepareReleaseArtProfile', task ':image_picker_android:mergeReleaseJavaResource', task 
+':image_picker_android:syncReleaseLibJars', task ':image_picker_android:bundleReleaseLocalLintAar', task 
+':image_picker_android:extractProguardFiles', task ':image_picker_android:writeReleaseLintModelMetadata', task 
+':image_picker_android:generateReleaseLintModel', task ':livekit_client:bundleLibRuntimeToJarRelease', task 
+':livekit_client:processReleaseJavaRes', task ':livekit_client:createFullJarRelease', task 
+':livekit_client:mergeReleaseJniLibFolders', task ':livekit_client:mergeReleaseNativeLibs', task 
+':livekit_client:stripReleaseDebugSymbols', task ':livekit_client:copyReleaseJniLibsProjectAndLocalJars', task 
+':livekit_client:extractDeepLinksForAarRelease', task ':livekit_client:extractReleaseAnnotations', task 
+':livekit_client:mergeReleaseGeneratedProguardFiles', task ':livekit_client:mergeReleaseConsumerProguardFiles', task 
+':livekit_client:prepareLintJarForPublish', task ':livekit_client:prepareReleaseArtProfile', task 
+':livekit_client:mergeReleaseJavaResource', task ':livekit_client:syncReleaseLibJars', task 
+':livekit_client:bundleReleaseLocalLintAar', task ':livekit_client:extractProguardFiles', task 
+':livekit_client:writeReleaseLintModelMetadata', task ':livekit_client:generateReleaseLintModel', task 
+':path_provider_android:bundleLibRuntimeToJarRelease', task ':path_provider_android:processReleaseJavaRes', task 
+':path_provider_android:createFullJarRelease', task ':path_provider_android:mergeReleaseJniLibFolders', task 
+':path_provider_android:mergeReleaseNativeLibs', task ':path_provider_android:stripReleaseDebugSymbols', task 
+':path_provider_android:copyReleaseJniLibsProjectAndLocalJars', task 
+':path_provider_android:extractDeepLinksForAarRelease', task ':path_provider_android:extractReleaseAnnotations', task 
+':path_provider_android:mergeReleaseGeneratedProguardFiles', task 
+':path_provider_android:mergeReleaseConsumerProguardFiles', task ':path_provider_android:prepareLintJarForPublish', 
+task ':path_provider_android:prepareReleaseArtProfile', task ':path_provider_android:mergeReleaseJavaResource', task 
+':path_provider_android:syncReleaseLibJars', task ':path_provider_android:bundleReleaseLocalLintAar', task 
+':path_provider_android:extractProguardFiles', task ':path_provider_android:writeReleaseLintModelMetadata', task 
+':path_provider_android:generateReleaseLintModel', task ':shared_preferences_android:bundleLibRuntimeToJarRelease', 
+task ':shared_preferences_android:processReleaseJavaRes', task ':shared_preferences_android:createFullJarRelease', 
+task ':shared_preferences_android:mergeReleaseJniLibFolders', task 
+':shared_preferences_android:mergeReleaseNativeLibs', task ':shared_preferences_android:stripReleaseDebugSymbols', 
+task ':shared_preferences_android:copyReleaseJniLibsProjectAndLocalJars', task 
+':shared_preferences_android:extractDeepLinksForAarRelease', task 
+':shared_preferences_android:extractReleaseAnnotations', task 
+':shared_preferences_android:mergeReleaseGeneratedProguardFiles', task 
+':shared_preferences_android:mergeReleaseConsumerProguardFiles', task 
+':shared_preferences_android:prepareLintJarForPublish', task ':shared_preferences_android:prepareReleaseArtProfile', 
+task ':shared_preferences_android:mergeReleaseJavaResource', task ':shared_preferences_android:syncReleaseLibJars', 
+task ':shared_preferences_android:bundleReleaseLocalLintAar', task ':shared_preferences_android:extractProguardFiles', 
+task ':shared_preferences_android:writeReleaseLintModelMetadata', task 
+':shared_preferences_android:generateReleaseLintModel', task ':app:generateReleaseLintVitalReportModel', task 
+':app:lintVitalAnalyzeRelease', task ':auth0_flutter:generateReleaseLintVitalModel', task 
+':auth0_flutter:lintVitalAnalyzeRelease', task ':connectivity_plus:generateReleaseLintVitalModel', task 
+':connectivity_plus:lintVitalAnalyzeRelease', task ':device_info_plus:generateReleaseLintVitalModel', task 
+':device_info_plus:lintVitalAnalyzeRelease', task ':flutter_plugin_android_lifecycle:generateReleaseLintVitalModel', 
+task ':flutter_plugin_android_lifecycle:lintVitalAnalyzeRelease', task 
+':flutter_webrtc:generateReleaseLintVitalModel', task ':flutter_webrtc:lintVitalAnalyzeRelease', task 
+':image_picker_android:generateReleaseLintVitalModel', task ':image_picker_android:lintVitalAnalyzeRelease', task 
+':livekit_client:generateReleaseLintVitalModel', task ':livekit_client:lintVitalAnalyzeRelease', task 
+':path_provider_android:generateReleaseLintVitalModel', task ':path_provider_android:lintVitalAnalyzeRelease', task 
+':shared_preferences_android:generateReleaseLintVitalModel', task 
+':shared_preferences_android:lintVitalAnalyzeRelease', task ':app:lintVitalReportRelease', task 
+':app:lintVitalRelease', task ':app:mergeReleaseJniLibFolders', task ':auth0_flutter:copyReleaseJniLibsProjectOnly', 
+task ':connectivity_plus:copyReleaseJniLibsProjectOnly', task ':device_info_plus:copyReleaseJniLibsProjectOnly', task 
+':flutter_plugin_android_lifecycle:copyReleaseJniLibsProjectOnly', task 
+':flutter_webrtc:copyReleaseJniLibsProjectOnly', task ':image_picker_android:copyReleaseJniLibsProjectOnly', task 
+':livekit_client:copyReleaseJniLibsProjectOnly', task ':path_provider_android:copyReleaseJniLibsProjectOnly', task 
+':shared_preferences_android:copyReleaseJniLibsProjectOnly', task ':app:mergeReleaseNativeLibs', task 
+':app:stripReleaseDebugSymbols', task ':app:extractReleaseNativeSymbolTables', task 
+':app:mergeReleaseNativeDebugMetadata', task ':auth0_flutter:bundleLibRuntimeToDirRelease', task 
+':livekit_client:bundleLibRuntimeToDirRelease', task ':connectivity_plus:bundleLibRuntimeToDirRelease', task 
+':device_info_plus:bundleLibRuntimeToDirRelease', task ':image_picker_android:bundleLibRuntimeToDirRelease', task 
+':flutter_plugin_android_lifecycle:bundleLibRuntimeToDirRelease', task ':flutter_webrtc:bundleLibRuntimeToDirRelease', 
+task ':path_provider_android:bundleLibRuntimeToDirRelease', task 
+':shared_preferences_android:bundleLibRuntimeToDirRelease', task ':app:checkReleaseDuplicateClasses', task 
+':app:dexBuilderRelease', task ':app:desugarReleaseFileDependencies', task ':app:mergeExtDexRelease', task 
+':app:mergeDexRelease', task ':app:mergeReleaseArtProfile', task ':app:mergeReleaseGlobalSynthetics', task 
+':app:compileReleaseArtProfile', task ':app:compressReleaseAssets', task ':app:processReleaseJavaRes', task 
+':app:mergeReleaseJavaResource', task ':app:optimizeReleaseResources', task ':app:collectReleaseDependencies', task 
+':app:sdkReleaseDependencyData', task ':app:validateSigningRelease', task ':app:writeReleaseAppMetadata', task 
+':app:writeReleaseSigningConfigVersions', task ':app:packageRelease', task ':app:createReleaseApkListingFileRedirect', 
+task ':app:assembleRelease', task ':auth0_flutter:bundleReleaseAar', task ':auth0_flutter:mapReleaseSourceSetPaths', 
+task ':auth0_flutter:mergeReleaseResources', task ':auth0_flutter:verifyReleaseResources', task 
+':auth0_flutter:assembleRelease', task ':connectivity_plus:bundleReleaseAar', task 
+':connectivity_plus:mapReleaseSourceSetPaths', task ':connectivity_plus:mergeReleaseResources', task 
+':connectivity_plus:verifyReleaseResources', task ':connectivity_plus:assembleRelease', task 
+':device_info_plus:bundleReleaseAar', task ':device_info_plus:mapReleaseSourceSetPaths', task 
+':device_info_plus:mergeReleaseResources', task ':device_info_plus:verifyReleaseResources', task 
+':device_info_plus:assembleRelease', task ':flutter_plugin_android_lifecycle:bundleReleaseAar', task 
+':flutter_plugin_android_lifecycle:mapReleaseSourceSetPaths', task 
+':flutter_plugin_android_lifecycle:mergeReleaseResources', task 
+':flutter_plugin_android_lifecycle:verifyReleaseResources', task ':flutter_plugin_android_lifecycle:assembleRelease', 
+task ':flutter_webrtc:bundleReleaseAar', task ':flutter_webrtc:mapReleaseSourceSetPaths', task 
+':flutter_webrtc:mergeReleaseResources', task ':flutter_webrtc:verifyReleaseResources', task 
+':flutter_webrtc:assembleRelease', task ':image_picker_android:bundleReleaseAar', task 
+':image_picker_android:mapReleaseSourceSetPaths', task ':image_picker_android:mergeReleaseResources', task 
+':image_picker_android:verifyReleaseResources', task ':image_picker_android:assembleRelease', task 
+':livekit_client:bundleReleaseAar', task ':livekit_client:mapReleaseSourceSetPaths', task 
+':livekit_client:mergeReleaseResources', task ':livekit_client:verifyReleaseResources', task 
+':livekit_client:assembleRelease', task ':path_provider_android:bundleReleaseAar', task 
+':path_provider_android:mapReleaseSourceSetPaths', task ':path_provider_android:mergeReleaseResources', task 
+':path_provider_android:verifyReleaseResources', task ':path_provider_android:assembleRelease', task 
+':shared_preferences_android:bundleReleaseAar', task ':shared_preferences_android:mapReleaseSourceSetPaths', task 
+':shared_preferences_android:mergeReleaseResources', task ':shared_preferences_android:verifyReleaseResources', task 
+':shared_preferences_android:assembleRelease']
+[        ] Resolve mutations for :app:javaPreCompileRelease (Thread[#868,Execution worker Thread 11,5,main]) started.
+[        ] :app:javaPreCompileRelease (Thread[#868,Execution worker Thread 11,5,main]) started.
+[        ] > Task :app:javaPreCompileRelease UP-TO-DATE
+[        ] Caching disabled for task ':app:javaPreCompileRelease' because:
+[        ] Skipping task ':app:javaPreCompileRelease' as it is up-to-date.
+[        ] Resolve mutations for :app:compileReleaseShaders (Thread[#861,Execution worker Thread 4,5,main]) started.
+[        ] :app:compileReleaseShaders (Thread[#861,Execution worker Thread 4,5,main]) started.
+[        ] > Task :app:compileReleaseShaders NO-SOURCE
+[        ] Skipping task ':app:compileReleaseShaders' as it has no source files and no previous output files.
+[        ] Resolve mutations for :auth0_flutter:compileReleaseShaders (Thread[#868,Execution worker Thread 11,5,main]) 
+started.
+[        ] :auth0_flutter:compileReleaseShaders (Thread[#868,Execution worker Thread 11,5,main]) started.
+[        ] > Task :auth0_flutter:compileReleaseShaders NO-SOURCE
+[        ] Skipping task ':auth0_flutter:compileReleaseShaders' as it has no source files and no previous output files.
+[        ] Resolve mutations for :connectivity_plus:compileReleaseShaders (Thread[#866,Execution worker Thread 
+9,5,main]) started.
+[        ] :connectivity_plus:compileReleaseShaders (Thread[#866,Execution worker Thread 9,5,main]) started.
+[        ] > Task :connectivity_plus:compileReleaseShaders NO-SOURCE
+[        ] Skipping task ':connectivity_plus:compileReleaseShaders' as it has no source files and no previous output 
+files.
+[        ] Resolve mutations for :device_info_plus:compileReleaseShaders (Thread[#867,Execution worker Thread 
+10,5,main]) started.
+[        ] :device_info_plus:compileReleaseShaders (Thread[#867,Execution worker Thread 10,5,main]) started.
+[        ] > Task :device_info_plus:compileReleaseShaders NO-SOURCE
+[        ] Skipping task ':device_info_plus:compileReleaseShaders' as it has no source files and no previous output 
+files.
+[        ] Resolve mutations for :flutter_plugin_android_lifecycle:compileReleaseShaders (Thread[#867,Execution worker 
+Thread 10,5,main]) started.
+[        ] :flutter_plugin_android_lifecycle:compileReleaseShaders (Thread[#867,Execution worker Thread 10,5,main]) 
+started.
+[        ] > Task :flutter_plugin_android_lifecycle:compileReleaseShaders NO-SOURCE
+[        ] Skipping task ':flutter_plugin_android_lifecycle:compileReleaseShaders' as it has no source files and no 
+previous output files.
+[        ] Resolve mutations for :flutter_webrtc:compileReleaseShaders (Thread[#864,Execution worker Thread 7,5,main]) 
+started.
+[        ] :flutter_webrtc:compileReleaseShaders (Thread[#864,Execution worker Thread 7,5,main]) started.
+[        ] > Task :flutter_webrtc:compileReleaseShaders NO-SOURCE
+[        ] Skipping task ':flutter_webrtc:compileReleaseShaders' as it has no source files and no previous output 
+files.
+[        ] Resolve mutations for :image_picker_android:compileReleaseShaders (Thread[#864,Execution worker Thread 
+7,5,main]) started.
+[        ] :image_picker_android:compileReleaseShaders (Thread[#864,Execution worker Thread 7,5,main]) started.
+[        ] > Task :image_picker_android:compileReleaseShaders NO-SOURCE
+[        ] Skipping task ':image_picker_android:compileReleaseShaders' as it has no source files and no previous 
+output files.
+[        ] Resolve mutations for :livekit_client:compileReleaseShaders (Thread[#862,Execution worker Thread 5,5,main]) 
+started.
+[        ] :livekit_client:compileReleaseShaders (Thread[#862,Execution worker Thread 5,5,main]) started.
+[        ] > Task :livekit_client:compileReleaseShaders NO-SOURCE
+[        ] Skipping task ':livekit_client:compileReleaseShaders' as it has no source files and no previous output 
+files.
+[        ] Resolve mutations for :path_provider_android:compileReleaseShaders (Thread[#859,Execution worker Thread 
+2,5,main]) started.
+[        ] :path_provider_android:compileReleaseShaders (Thread[#859,Execution worker Thread 2,5,main]) started.
+[        ] > Task :path_provider_android:compileReleaseShaders NO-SOURCE
+[        ] Skipping task ':path_provider_android:compileReleaseShaders' as it has no source files and no previous 
+output files.
+[        ] Resolve mutations for :shared_preferences_android:compileReleaseShaders (Thread[#857,included 
+builds,5,main]) started.
+[        ] :shared_preferences_android:compileReleaseShaders (Thread[#857,included builds,5,main]) started.
+[        ] > Task :shared_preferences_android:compileReleaseShaders NO-SOURCE
+[        ] Skipping task ':shared_preferences_android:compileReleaseShaders' as it has no source files and no previous 
+output files.
+[        ] Resolve mutations for :auth0_flutter:compileReleaseLibraryResources (Thread[#867,Execution worker Thread 
+10,5,main]) started.
+[        ] :auth0_flutter:compileReleaseLibraryResources (Thread[#867,Execution worker Thread 10,5,main]) started.
+[        ] > Task :auth0_flutter:compileReleaseLibraryResources UP-TO-DATE
+[        ] Caching disabled for task ':auth0_flutter:compileReleaseLibraryResources' because:
+[        ] Skipping task ':auth0_flutter:compileReleaseLibraryResources' as it is up-to-date.
+[        ] Resolve mutations for :connectivity_plus:compileReleaseLibraryResources (Thread[#867,Execution worker 
+Thread 10,5,main]) started.
+[        ] :connectivity_plus:compileReleaseLibraryResources (Thread[#867,Execution worker Thread 10,5,main]) started.
+[        ] > Task :connectivity_plus:compileReleaseLibraryResources UP-TO-DATE
+[        ] Caching disabled for task ':connectivity_plus:compileReleaseLibraryResources' because:
+[        ] Skipping task ':connectivity_plus:compileReleaseLibraryResources' as it is up-to-date.
+[        ] Resolve mutations for :device_info_plus:compileReleaseLibraryResources (Thread[#867,Execution worker Thread 
+10,5,main]) started.
+[        ] :device_info_plus:compileReleaseLibraryResources (Thread[#867,Execution worker Thread 10,5,main]) started.
+[        ] > Task :device_info_plus:compileReleaseLibraryResources UP-TO-DATE
+[        ] Caching disabled for task ':device_info_plus:compileReleaseLibraryResources' because:
+[        ] Skipping task ':device_info_plus:compileReleaseLibraryResources' as it is up-to-date.
+[        ] Resolve mutations for :flutter_plugin_android_lifecycle:compileReleaseLibraryResources 
+(Thread[#865,Execution worker Thread 8,5,main]) started.
+[        ] :flutter_plugin_android_lifecycle:compileReleaseLibraryResources (Thread[#865,Execution worker Thread 
+8,5,main]) started.
+[        ] > Task :flutter_plugin_android_lifecycle:compileReleaseLibraryResources UP-TO-DATE
+[        ] Caching disabled for task ':flutter_plugin_android_lifecycle:compileReleaseLibraryResources' because:
+[        ] Skipping task ':flutter_plugin_android_lifecycle:compileReleaseLibraryResources' as it is up-to-date.
+[        ] Resolve mutations for :flutter_webrtc:compileReleaseLibraryResources (Thread[#865,Execution worker Thread 
+8,5,main]) started.
+[        ] :flutter_webrtc:compileReleaseLibraryResources (Thread[#865,Execution worker Thread 8,5,main]) started.
+[        ] > Task :flutter_webrtc:compileReleaseLibraryResources UP-TO-DATE
+[        ] Caching disabled for task ':flutter_webrtc:compileReleaseLibraryResources' because:
+[        ] Skipping task ':flutter_webrtc:compileReleaseLibraryResources' as it is up-to-date.
+[        ] Resolve mutations for :image_picker_android:compileReleaseLibraryResources (Thread[#864,Execution worker 
+Thread 7,5,main]) started.
+[        ] :image_picker_android:compileReleaseLibraryResources (Thread[#864,Execution worker Thread 7,5,main]) 
+started.
+[        ] > Task :image_picker_android:compileReleaseLibraryResources UP-TO-DATE
+[        ] Caching disabled for task ':image_picker_android:compileReleaseLibraryResources' because:
+[        ] Skipping task ':image_picker_android:compileReleaseLibraryResources' as it is up-to-date.
+[        ] Resolve mutations for :livekit_client:compileReleaseLibraryResources (Thread[#864,Execution worker Thread 
+7,5,main]) started.
+[        ] :livekit_client:compileReleaseLibraryResources (Thread[#859,Execution worker Thread 2,5,main]) started.
+[        ] > Task :livekit_client:compileReleaseLibraryResources UP-TO-DATE
+[        ] Caching disabled for task ':livekit_client:compileReleaseLibraryResources' because:
+[        ] Skipping task ':livekit_client:compileReleaseLibraryResources' as it is up-to-date.
+[        ] Resolve mutations for :path_provider_android:compileReleaseLibraryResources (Thread[#865,Execution worker 
+Thread 8,5,main]) started.
+[        ] :path_provider_android:compileReleaseLibraryResources (Thread[#865,Execution worker Thread 8,5,main]) 
+started.
+[        ] > Task :path_provider_android:compileReleaseLibraryResources UP-TO-DATE
+[        ] Caching disabled for task ':path_provider_android:compileReleaseLibraryResources' because:
+[        ] Skipping task ':path_provider_android:compileReleaseLibraryResources' as it is up-to-date.
+[        ] Resolve mutations for :shared_preferences_android:compileReleaseLibraryResources (Thread[#863,Execution 
+worker Thread 6,5,main]) started.
+[        ] :shared_preferences_android:compileReleaseLibraryResources (Thread[#863,Execution worker Thread 6,5,main]) 
+started.
+[        ] > Task :shared_preferences_android:compileReleaseLibraryResources UP-TO-DATE
+[        ] Caching disabled for task ':shared_preferences_android:compileReleaseLibraryResources' because:
+[        ] Skipping task ':shared_preferences_android:compileReleaseLibraryResources' as it is up-to-date.
+[        ] Resolve mutations for :auth0_flutter:compileReleaseKotlin (Thread[#867,Execution worker Thread 10,5,main]) 
+started.
+[        ] :auth0_flutter:compileReleaseKotlin (Thread[#867,Execution worker Thread 10,5,main]) started.
+[  +31 ms] > Task :auth0_flutter:compileReleaseKotlin UP-TO-DATE
+[        ] Caching disabled for task ':auth0_flutter:compileReleaseKotlin' because:
+[        ] Skipping task ':auth0_flutter:compileReleaseKotlin' as it is up-to-date.
+[        ] Resolve mutations for :auth0_flutter:javaPreCompileRelease (Thread[#867,Execution worker Thread 10,5,main]) 
+started.
+[        ] :auth0_flutter:javaPreCompileRelease (Thread[#867,Execution worker Thread 10,5,main]) started.
+[        ] > Task :auth0_flutter:javaPreCompileRelease UP-TO-DATE
+[        ] Caching disabled for task ':auth0_flutter:javaPreCompileRelease' because:
+[        ] Skipping task ':auth0_flutter:javaPreCompileRelease' as it is up-to-date.
+[        ] Resolve mutations for :auth0_flutter:compileReleaseJavaWithJavac (Thread[#867,Execution worker Thread 
+10,5,main]) started.
+[        ] :auth0_flutter:compileReleaseJavaWithJavac (Thread[#867,Execution worker Thread 10,5,main]) started.
+[        ] > Task :auth0_flutter:compileReleaseJavaWithJavac NO-SOURCE
+[        ] Skipping task ':auth0_flutter:compileReleaseJavaWithJavac' as it has no source files and no previous output 
+files.
+[        ] Resolve mutations for :connectivity_plus:javaPreCompileRelease (Thread[#867,Execution worker Thread 
+10,5,main]) started.
+[        ] :connectivity_plus:javaPreCompileRelease (Thread[#867,Execution worker Thread 10,5,main]) started.
+[        ] > Task :connectivity_plus:javaPreCompileRelease UP-TO-DATE
+[        ] Caching disabled for task ':connectivity_plus:javaPreCompileRelease' because:
+[        ] Skipping task ':connectivity_plus:javaPreCompileRelease' as it is up-to-date.
+[        ] Resolve mutations for :connectivity_plus:compileReleaseJavaWithJavac (Thread[#867,Execution worker Thread 
+10,5,main]) started.
+[        ] :connectivity_plus:compileReleaseJavaWithJavac (Thread[#867,Execution worker Thread 10,5,main]) started.
+[        ] > Task :connectivity_plus:compileReleaseJavaWithJavac UP-TO-DATE
+[        ] Caching disabled for task ':connectivity_plus:compileReleaseJavaWithJavac' because:
+[        ] Skipping task ':connectivity_plus:compileReleaseJavaWithJavac' as it is up-to-date.
+[        ] No compile result for :connectivity_plus:compileReleaseJavaWithJavac
+[        ] No compile result for :connectivity_plus:compileReleaseJavaWithJavac
+[        ] Resolve mutations for :device_info_plus:compileReleaseKotlin (Thread[#863,Execution worker Thread 
+6,5,main]) started.
+[        ] :device_info_plus:compileReleaseKotlin (Thread[#863,Execution worker Thread 6,5,main]) started.
+[        ] > Task :device_info_plus:compileReleaseKotlin UP-TO-DATE
+[        ] Caching disabled for task ':device_info_plus:compileReleaseKotlin' because:
+[        ] Skipping task ':device_info_plus:compileReleaseKotlin' as it is up-to-date.
+[        ] Resolve mutations for :device_info_plus:javaPreCompileRelease (Thread[#863,Execution worker Thread 
+6,5,main]) started.
+[        ] :device_info_plus:javaPreCompileRelease (Thread[#863,Execution worker Thread 6,5,main]) started.
+[        ] > Task :device_info_plus:javaPreCompileRelease UP-TO-DATE
+[        ] Caching disabled for task ':device_info_plus:javaPreCompileRelease' because:
+[        ] Skipping task ':device_info_plus:javaPreCompileRelease' as it is up-to-date.
+[        ] Resolve mutations for :device_info_plus:compileReleaseJavaWithJavac (Thread[#863,Execution worker Thread 
+6,5,main]) started.
+[        ] :device_info_plus:compileReleaseJavaWithJavac (Thread[#863,Execution worker Thread 6,5,main]) started.
+[        ] > Task :device_info_plus:compileReleaseJavaWithJavac NO-SOURCE
+[        ] Skipping task ':device_info_plus:compileReleaseJavaWithJavac' as it has no source files and no previous 
+output files.
+[        ] Resolve mutations for :flutter_plugin_android_lifecycle:javaPreCompileRelease (Thread[#865,Execution worker 
+Thread 8,5,main]) started.
+[        ] :flutter_plugin_android_lifecycle:javaPreCompileRelease (Thread[#865,Execution worker Thread 8,5,main]) 
+started.
+[        ] > Task :flutter_plugin_android_lifecycle:javaPreCompileRelease UP-TO-DATE
+[        ] Caching disabled for task ':flutter_plugin_android_lifecycle:javaPreCompileRelease' because:
+[        ] Skipping task ':flutter_plugin_android_lifecycle:javaPreCompileRelease' as it is up-to-date.
+[        ] Resolve mutations for :flutter_plugin_android_lifecycle:compileReleaseJavaWithJavac (Thread[#865,Execution 
+worker Thread 8,5,main]) started.
+[        ] :flutter_plugin_android_lifecycle:compileReleaseJavaWithJavac (Thread[#865,Execution worker Thread 
+8,5,main]) started.
+[  +29 ms] > Task :flutter_plugin_android_lifecycle:compileReleaseJavaWithJavac UP-TO-DATE
+[        ] Caching disabled for task ':flutter_plugin_android_lifecycle:compileReleaseJavaWithJavac' because:
+[        ] Skipping task ':flutter_plugin_android_lifecycle:compileReleaseJavaWithJavac' as it is up-to-date.
+[        ] No compile result for :flutter_plugin_android_lifecycle:compileReleaseJavaWithJavac
+[        ] No compile result for :flutter_plugin_android_lifecycle:compileReleaseJavaWithJavac
+[        ] Resolve mutations for :flutter_webrtc:compileReleaseKotlin (Thread[#864,Execution worker Thread 7,5,main]) 
+started.
+[        ] :flutter_webrtc:compileReleaseKotlin (Thread[#864,Execution worker Thread 7,5,main]) started.
+[        ] > Task :flutter_webrtc:compileReleaseKotlin UP-TO-DATE
+[        ] Caching disabled for task ':flutter_webrtc:compileReleaseKotlin' because:
+[        ] Skipping task ':flutter_webrtc:compileReleaseKotlin' as it is up-to-date.
+[        ] Resolve mutations for :flutter_webrtc:javaPreCompileRelease (Thread[#864,Execution worker Thread 7,5,main]) 
+started.
+[        ] :flutter_webrtc:javaPreCompileRelease (Thread[#864,Execution worker Thread 7,5,main]) started.
+[        ] > Task :flutter_webrtc:javaPreCompileRelease UP-TO-DATE
+[        ] Caching disabled for task ':flutter_webrtc:javaPreCompileRelease' because:
+[        ] Skipping task ':flutter_webrtc:javaPreCompileRelease' as it is up-to-date.
+[        ] Resolve mutations for :flutter_webrtc:compileReleaseJavaWithJavac (Thread[#864,Execution worker Thread 
+7,5,main]) started.
+[        ] :flutter_webrtc:compileReleaseJavaWithJavac (Thread[#864,Execution worker Thread 7,5,main]) started.
+[ +689 ms] > Task :flutter_webrtc:compileReleaseJavaWithJavac FAILED
+[        ] Caching disabled for task ':flutter_webrtc:compileReleaseJavaWithJavac' because:
+[        ] Task ':flutter_webrtc:compileReleaseJavaWithJavac' is not up-to-date because:
+[        ] The input changes require a full rebuild for incremental task ':flutter_webrtc:compileReleaseJavaWithJavac'.
+eTextureRenderer.java:118: error: <anonymous com.cloudwebrtc.webrtc.SurfaceTextureRenderer$1> is not abstract and does 
+eTextureRenderer.java:124: error: method does not override or implement a method from a supertype
+[        ] Execution failed for task ':flutter_webrtc:compileReleaseJavaWithJavac'.
+':flutter_webrtc:compileReleaseJavaWithJavac'.
+
+
