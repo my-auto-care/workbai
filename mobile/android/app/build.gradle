@@ -6,7 +6,7 @@ plugins {
 android {
     namespace "ai.workbay.app"
     compileSdk 35
-    ndkVersion "25.1.8937393"
+    ndkVersion "27.0.12077973"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -52,5 +52,31 @@ if (flutterPluginsFile.exists()) {
                 }
             }
         }
+    }
+}
+
+// Patch flutter_webrtc SurfaceTextureRenderer before compilation
+// Replaces broken onSurfaceDestroyed with onSurfaceCleanup for compileSdk 35
+tasks.register('patchFlutterWebRTC') {
+    doLast {
+        def pubCache = System.getenv('LOCALAPPDATA')
+            ? "${System.getenv('LOCALAPPDATA')}\\Pub\\Cache\\hosted\\pub.dev"
+            : "${System.getProperty('user.home')}/.pub-cache/hosted/pub.dev"
+        def versions = ['0.13.1', '0.13.1+hotfix.1', '0.14.0', '0.14.1', '0.14.2']
+        versions.each { ver ->
+            def target = new File("${pubCache}/flutter_webrtc-${ver}/android/src/main/java/com/cloudwebrtc/webrtc/SurfaceTextureRenderer.java")
+            if (target.exists()) {
+                def content = target.text
+                if (content.contains('onSurfaceDestroyed')) {
+                    target.text = content.replace('onSurfaceDestroyed', 'onSurfaceCleanup')
+                    println "Patched: ${target.absolutePath}"
+                }
+            }
+        }
+    }
+}
+afterEvaluate {
+    tasks.matching { it.name.startsWith('compile') && it.name.contains('Java') }.configureEach {
+        dependsOn 'patchFlutterWebRTC'
     }
 }
