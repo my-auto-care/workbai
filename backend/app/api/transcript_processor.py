@@ -61,7 +61,7 @@ async def _transcribe_assemblyai(upload_url: str) -> str:
         # Submit job
         r = await client.post(f"{ASSEMBLYAI_BASE}/transcript", headers=headers, json={
             "audio_url": upload_url,
-            "language_code": "en",
+            "speech_models": ["universal-2"],
             "punctuate": True,
             "format_text": True,
             "filter_profanity": False,
@@ -172,6 +172,17 @@ async def process_transcript(
     db.add(finding)
     db.commit()
     db.refresh(finding)
+
+    # Link any unattached session media to this finding
+    from app.db.models import Media
+    unlinked = db.query(Media).filter(
+        Media.session_id == session_id,
+        Media.finding_id == None
+    ).all()
+    for m in unlinked:
+        m.finding_id = finding.id
+    if unlinked:
+        db.commit()
 
     return {
         "finding_id": str(finding.id),
