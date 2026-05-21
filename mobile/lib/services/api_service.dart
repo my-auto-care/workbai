@@ -35,6 +35,7 @@ class ApiService {
     String? vehicleMake,
     String? vehicleModel,
     String? vehicleVin,
+    int? vehicleMileage,
     String? checklistTemplateId,
     String? customerConcern,
     String? status,
@@ -48,6 +49,7 @@ class ApiService {
           if (vehicleMake != null) 'vehicle_make': vehicleMake,
           if (vehicleModel != null) 'vehicle_model': vehicleModel,
           if (vehicleVin != null) 'vehicle_vin': vehicleVin,
+          if (vehicleMileage != null) 'vehicle_mileage': vehicleMileage,
           if (checklistTemplateId != null) 'checklist_template_id': checklistTemplateId,
           if (customerConcern != null) 'customer_concern': customerConcern,
           if (status != null) 'status': status,
@@ -120,5 +122,20 @@ class ApiService {
           if (findingId != null) 'finding_id': findingId,
         }));
     if (r.statusCode != 201) throw Exception('Failed to attach media: ${r.body}');
+  }
+
+  /// Save the full transcript from transcript mode as a single finding
+  Future<void> saveTranscriptFinding({
+    required String sessionId,
+    required String transcript,
+  }) async {
+    final r = await http.post(Uri.parse('$kBaseUrl/sessions/$sessionId/findings'), headers: _h,
+        body: jsonEncode({
+          'checklist_item_id': 'transcript_mode',
+          'transcript': transcript,
+          'condition': 'na',
+          'structured_data': {'mode': 'transcript_only', 'word_count': transcript.split(' ').length},
+        }));
+    if (r.statusCode != 201) throw Exception('Failed to save transcript: ${r.body}');
   }
 }
