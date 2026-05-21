@@ -127,6 +127,8 @@ class InspectionSession(Base):
     vehicle_make = Column(String(100))
     vehicle_model = Column(String(100))
     vehicle_vin = Column(String(50))
+    vehicle_mileage = Column(Integer, nullable=True)
+    vehicle_intel = Column(JSONB, nullable=True)
     # Dispatch: technician assigned by shop manager
     assigned_technician_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     status = Column(SAEnum(SessionStatus), default=SessionStatus.in_progress)

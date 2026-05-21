@@ -22,6 +22,7 @@ class SessionCreate(BaseModel):
     vehicle_make: Optional[str] = None
     vehicle_model: Optional[str] = None
     vehicle_vin: Optional[str] = None
+    vehicle_mileage: Optional[int] = None
     checklist_template_id: Optional[uuid.UUID] = None
     customer_concern: Optional[str] = None
     status: Optional[str] = None
@@ -49,6 +50,7 @@ def _session_dict(s):
         "vehicle_make": s.vehicle_make,
         "vehicle_model": s.vehicle_model,
         "vehicle_vin": s.vehicle_vin,
+        "vehicle_mileage": s.vehicle_mileage,
         "started_at": s.started_at,
         "completed_at": s.completed_at,
     }
@@ -83,6 +85,7 @@ def create_session(body: SessionCreate, db: Session = Depends(get_db)):
         vehicle_make=body.vehicle_make,
         vehicle_model=body.vehicle_model,
         vehicle_vin=body.vehicle_vin,
+        vehicle_mileage=body.vehicle_mileage,
         checklist_template_id=body.checklist_template_id,
         customer_concern=body.customer_concern,
         status=initial_status,

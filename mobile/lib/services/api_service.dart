@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 const String kBaseUrl = 'https://app.workbai.autorepairsolutions.ai';
@@ -124,18 +125,27 @@ class ApiService {
     if (r.statusCode != 201) throw Exception('Failed to attach media: ${r.body}');
   }
 
-  /// Save the full transcript from transcript mode as a single finding
-  Future<void> saveTranscriptFinding({
+  /// Send audio file to backend for AssemblyAI transcription + Claude cleanup
+  Future<Map<String, dynamic>> processTranscript({
     required String sessionId,
-    required String transcript,
+    required String audioPath,
+    String photoMarkers = '',
   }) async {
-    final r = await http.post(Uri.parse('$kBaseUrl/sessions/$sessionId/findings'), headers: _h,
-        body: jsonEncode({
-          'checklist_item_id': 'transcript_mode',
-          'transcript': transcript,
-          'condition': 'na',
-          'structured_data': {'mode': 'transcript_only', 'word_count': transcript.split(' ').length},
-        }));
-    if (r.statusCode != 201) throw Exception('Failed to save transcript: ${r.body}');
+    final file = File(audioPath);
+    final bytes = await file.readAsBytes();
+
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$kBaseUrl/sessions/$sessionId/process-transcript'),
+    );
+    if (_authToken != null) request.headers['Authorization'] = 'Bearer $_authToken';
+    request.files.add(http.MultipartFile.fromBytes('audio', bytes,
+        filename: 'inspection.m4a'));
+    request.fields['photo_markers'] = photoMarkers;
+
+    final streamed = await request.send().timeout(const Duration(minutes: 15));
+    final body = await streamed.stream.bytesToString();
+    if (streamed.statusCode == 200) return jsonDecode(body);
+    throw Exception('Transcript processing failed: $body');
   }
 }
