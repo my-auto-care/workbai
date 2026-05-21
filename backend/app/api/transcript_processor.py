@@ -155,20 +155,20 @@ async def process_transcript(
     vehicle = result.get("vehicle", {})
     logger.info(f"Clean transcript: {len(clean_transcript)} chars, extracted vehicle: {vehicle}")
 
-    # Auto-fetch recalls
+    # Auto-fetch vehicle data if we have a VIN
+    vehicle_full = {}
     recalls = []
     complaints = []
-    yr = vehicle.get("year") or session.vehicle_year
-    mk = vehicle.get("make") or session.vehicle_make
-    mo = vehicle.get("model") or session.vehicle_model
-    if yr and mk and mo:
+    vin = vehicle.get("vin") or session.vehicle_vin
+    if vin and len(str(vin)) == 17:
         try:
-            from app.api.vehicle_lookup import _get_recalls_and_complaints
-            import asyncio
-            recalls, complaints = await _get_recalls_and_complaints(yr, mk, mo)
-            logger.info(f"Fetched {len(recalls)} recalls")
+            from app.api.vehicle_lookup import decode_vin_full
+            vehicle_full = await decode_vin_full(vin)
+            recalls = vehicle_full.get("recalls", [])
+            complaints = vehicle_full.get("common_repairs", [])
+            logger.info(f"VIN decode: {len(recalls)} recalls, {len(complaints)} common repairs")
         except Exception as e:
-            logger.warning(f"Recall fetch failed: {e}")
+            logger.warning(f"VIN full decode failed: {e}")
 
     # Update session with any newly extracted vehicle info (only fill blanks)
     updated = False
@@ -197,7 +197,9 @@ async def process_transcript(
             "vehicle_extracted": vehicle,
             "photo_markers": photo_markers.split(",") if photo_markers else [],
             "recalls": recalls,
-            "complaints": complaints,
+            "common_repairs": complaints,
+            "maintenance": vehicle_full.get("maintenance", {}),
+            "vehicle_detail": vehicle_full.get("vehicle", {}),
         }
     )
     db.add(finding)
