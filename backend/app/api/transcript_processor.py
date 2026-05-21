@@ -120,7 +120,15 @@ async def process_transcript(
     """
     session = db.get(InspectionSession, session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        # Session not found — create a minimal one so transcript can be saved
+        from app.db.models import SessionStatus
+        session = InspectionSession(
+            id=session_id,
+            status=SessionStatus.in_progress,
+        )
+        db.add(session)
+        db.commit()
+        db.refresh(session)
 
     vehicle_info = f"{session.vehicle_year or ''} {session.vehicle_make or ''} {session.vehicle_model or ''}".strip() or "Unknown vehicle"
 

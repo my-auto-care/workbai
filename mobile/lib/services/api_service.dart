@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 
 const String kBaseUrl = 'https://app.workbai.autorepairsolutions.ai';
 
@@ -114,7 +115,7 @@ class ApiService {
     required String s3Key,
     String? findingId,
   }) async {
-    final mediaId = DateTime.now().millisecondsSinceEpoch.toString();
+    final mediaId = const Uuid().v4();
     final r = await http.post(Uri.parse('$kBaseUrl/media/$mediaId/attach'), headers: _h,
         body: jsonEncode({
           'session_id': sessionId,
