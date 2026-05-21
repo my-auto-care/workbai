@@ -1,12 +1,13 @@
 """
 Transcript Processing Endpoint
 Receives an audio file, transcribes via AssemblyAI, then uses Claude to
-strip background noise/banter and return only inspection-relevant content.
+strip background noise/banter, extract vehicle info, and return only inspection-relevant content.
 """
 import os
+import json
 import logging
+import asyncio
 import httpx
-import time
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session as DBSession
@@ -23,29 +24,36 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 ASSEMBLYAI_BASE = "https://api.assemblyai.com/v2"
 
 
-CLEANUP_PROMPT = """You are an automotive inspection transcript cleaner.
+CLAUDE_PROMPT = """You are an automotive inspection transcript processor.
 
-You will receive a raw audio transcript from a vehicle inspection. The technician was recording the entire time — including walking around, background shop noise, conversations with coworkers, personal talk, and silence fillers.
+You will receive a raw audio transcript from a vehicle inspection. Your job is to do TWO things and return a JSON object.
 
-Your job:
-1. Extract ONLY inspection-relevant content — findings, observations, measurements, part conditions
-2. Remove ALL of the following:
-   - Background noise transcriptions (clanging, music, radio, etc.)
-   - Conversations with coworkers unrelated to the inspection
-   - Personal banter, jokes, phone calls
-   - Filler sounds (um, uh, hmm) unless part of a finding
-   - Repeated false starts
-   - Anything clearly not about the vehicle being inspected
-3. Preserve the order and context of findings
-4. Keep photo markers exactly as they appear: [PHOTO]
-5. Return clean prose — no bullet points, no headers, just the cleaned inspection narrative
+TASK 1 — Clean the transcript:
+- Extract ONLY inspection-relevant content: findings, observations, measurements, part conditions
+- Remove: background noise, coworker chatter, personal talk, filler sounds (um/uh), false starts
+- Preserve order and context of findings
+- Return clean prose, no bullet points, no headers
 
-If a sentence is ambiguous (could be inspection-related), keep it.
-Return ONLY the cleaned transcript text. No explanation, no preamble."""
+TASK 2 — Extract vehicle info mentioned in the transcript:
+- Look for year (4-digit number like 2019, 2022), make (Ford, Toyota, etc.), model (F-150, Camry, etc.)
+- Look for mileage (e.g. "at 87,000 miles", "87k")
+- Look for VIN if mentioned
+- Only extract if clearly stated — do not guess
+
+Return ONLY valid JSON in this exact format:
+{
+  "transcript": "<cleaned inspection narrative here>",
+  "vehicle": {
+    "year": <integer or null>,
+    "make": "<string or null>",
+    "model": "<string or null>",
+    "mileage": <integer or null>,
+    "vin": "<string or null>"
+  }
+}"""
 
 
 async def _upload_to_assemblyai(audio_bytes: bytes, content_type: str) -> str:
-    """Upload audio to AssemblyAI and return the upload URL."""
     headers = {"authorization": ASSEMBLYAI_API_KEY, "content-type": content_type}
     async with httpx.AsyncClient(timeout=60.0) as client:
         r = await client.post(f"{ASSEMBLYAI_BASE}/upload", headers=headers, content=audio_bytes)
@@ -55,25 +63,22 @@ async def _upload_to_assemblyai(audio_bytes: bytes, content_type: str) -> str:
 
 
 async def _transcribe_assemblyai(upload_url: str) -> str:
-    """Submit transcription job and poll until complete."""
     headers = {"authorization": ASSEMBLYAI_API_KEY, "content-type": "application/json"}
     async with httpx.AsyncClient(timeout=30.0) as client:
-        # Submit job
         r = await client.post(f"{ASSEMBLYAI_BASE}/transcript", headers=headers, json={
             "audio_url": upload_url,
             "speech_models": ["universal-2"],
             "punctuate": True,
             "format_text": True,
             "filter_profanity": False,
-            "disfluencies": False,  # strip um/uh automatically
+            "disfluencies": False,
         })
         if r.status_code != 200:
             raise HTTPException(status_code=500, detail=f"AssemblyAI job failed: {r.text}")
         job_id = r.json()["id"]
 
-    # Poll for completion
     async with httpx.AsyncClient(timeout=10.0) as client:
-        for _ in range(120):  # max 10 minutes
+        for _ in range(120):
             await asyncio.sleep(5)
             r = await client.get(f"{ASSEMBLYAI_BASE}/transcript/{job_id}",
                                  headers={"authorization": ASSEMBLYAI_API_KEY})
@@ -87,62 +92,55 @@ async def _transcribe_assemblyai(upload_url: str) -> str:
     raise HTTPException(status_code=504, detail="Transcription timed out")
 
 
-def _clean_with_claude(raw_transcript: str, vehicle_info: str) -> str:
-    """Use Claude to strip irrelevant content from the transcript."""
+def _process_with_claude(raw_transcript: str, existing_vehicle: str) -> dict:
+    """Clean transcript and extract vehicle info in one Claude call."""
     if not ANTHROPIC_API_KEY:
-        return raw_transcript  # fallback: return raw if no key
+        return {"transcript": raw_transcript, "vehicle": {}}
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     response = client.messages.create(
-        model="claude-haiku-4-5",  # fast + cheap for cleanup task
+        model="claude-haiku-4-5",
         max_tokens=4000,
-        system=CLEANUP_PROMPT,
+        system=CLAUDE_PROMPT,
         messages=[{
             "role": "user",
-            "content": f"Vehicle: {vehicle_info}\n\nRaw transcript:\n{raw_transcript}"
+            "content": f"Existing vehicle info (already known, only add what is missing): {existing_vehicle}\n\nRaw transcript:\n{raw_transcript}"
         }]
     )
-    return response.content[0].text.strip()
+    text = response.content[0].text.strip()
+    # Strip markdown code fences if present
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    try:
+        return json.loads(text)
+    except Exception:
+        return {"transcript": raw_transcript, "vehicle": {}}
 
-
-import asyncio
 
 @router.post("/sessions/{session_id}/process-transcript")
 async def process_transcript(
     session_id: uuid.UUID,
     audio: UploadFile = File(...),
-    photo_markers: str = Form(default=""),  # comma-separated timestamps where photos were taken
+    photo_markers: str = Form(default=""),
     db: DBSession = Depends(get_db),
 ):
-    """
-    Receive audio recording from transcript mode inspection.
-    Transcribe via AssemblyAI, clean via Claude, save as finding.
-    """
     session = db.get(InspectionSession, session_id)
     if not session:
-        # Session not found — create a minimal one so transcript can be saved
         from app.db.models import SessionStatus
-        session = InspectionSession(
-            id=session_id,
-            status=SessionStatus.in_progress,
-        )
+        session = InspectionSession(id=session_id, status=SessionStatus.in_progress)
         db.add(session)
         db.commit()
         db.refresh(session)
 
-    vehicle_info = f"{session.vehicle_year or ''} {session.vehicle_make or ''} {session.vehicle_model or ''}".strip() or "Unknown vehicle"
+    existing_vehicle = f"{session.vehicle_year or ''} {session.vehicle_make or ''} {session.vehicle_model or ''}".strip() or "Unknown"
+    logger.info(f"Processing transcript for session {session_id}, vehicle: {existing_vehicle}")
 
-    logger.info(f"Processing transcript audio for session {session_id}, vehicle: {vehicle_info}")
-
-    # Read audio
     audio_bytes = await audio.read()
-    content_type = audio.content_type or "audio/m4a"
+    content_type = audio.content_type or "audio/aac"
 
-    # Step 1: Upload to AssemblyAI
-    logger.info("Uploading audio to AssemblyAI...")
+    logger.info("Uploading to AssemblyAI...")
     upload_url = await _upload_to_assemblyai(audio_bytes, content_type)
 
-    # Step 2: Transcribe
     logger.info("Transcribing...")
     raw_transcript = await _transcribe_assemblyai(upload_url)
     logger.info(f"Raw transcript: {len(raw_transcript)} chars")
@@ -150,12 +148,28 @@ async def process_transcript(
     if not raw_transcript:
         raise HTTPException(status_code=422, detail="No speech detected in audio")
 
-    # Step 3: Clean with Claude
-    logger.info("Cleaning transcript with Claude...")
-    clean_transcript = _clean_with_claude(raw_transcript, vehicle_info)
-    logger.info(f"Clean transcript: {len(clean_transcript)} chars")
+    logger.info("Processing with Claude...")
+    result = _process_with_claude(raw_transcript, existing_vehicle)
 
-    # Step 4: Save as finding
+    clean_transcript = result.get("transcript", raw_transcript)
+    vehicle = result.get("vehicle", {})
+    logger.info(f"Clean transcript: {len(clean_transcript)} chars, extracted vehicle: {vehicle}")
+
+    # Update session with any newly extracted vehicle info (only fill blanks)
+    updated = False
+    if vehicle.get("year") and not session.vehicle_year:
+        session.vehicle_year = vehicle["year"]; updated = True
+    if vehicle.get("make") and not session.vehicle_make:
+        session.vehicle_make = vehicle["make"]; updated = True
+    if vehicle.get("model") and not session.vehicle_model:
+        session.vehicle_model = vehicle["model"]; updated = True
+    if vehicle.get("mileage") and not session.vehicle_mileage:
+        session.vehicle_mileage = vehicle["mileage"]; updated = True
+    if vehicle.get("vin") and not session.vehicle_vin:
+        session.vehicle_vin = vehicle["vin"]; updated = True
+    if updated:
+        db.commit()
+
     finding = Finding(
         session_id=session_id,
         checklist_item_id="transcript_mode",
@@ -165,7 +179,7 @@ async def process_transcript(
             "mode": "transcript_only",
             "raw_length": len(raw_transcript),
             "clean_length": len(clean_transcript),
-            "vehicle": vehicle_info,
+            "vehicle_extracted": vehicle,
             "photo_markers": photo_markers.split(",") if photo_markers else [],
         }
     )
@@ -173,7 +187,7 @@ async def process_transcript(
     db.commit()
     db.refresh(finding)
 
-    # Link any unattached session media to this finding
+    # Link unattached session media to this finding
     from app.db.models import Media
     unlinked = db.query(Media).filter(
         Media.session_id == session_id,
@@ -190,4 +204,5 @@ async def process_transcript(
         "raw_length": len(raw_transcript),
         "clean_length": len(clean_transcript),
         "words_removed": len(raw_transcript.split()) - len(clean_transcript.split()),
+        "vehicle_extracted": vehicle,
     }
