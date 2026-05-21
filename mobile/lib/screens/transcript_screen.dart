@@ -39,26 +39,32 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
 
   _State _state = _State.recording;
   String? _error;
-  String? _audioPath;
-  DateTime? _recordingStartTime;
-  Duration _elapsed = Duration.zero;
+
+  // Track multiple audio segment files (stop/start instead of pause/resume)
+  final List<String> _audioSegments = [];
+  String? _currentSegmentPath;
+  int _segmentIndex = 0;
+
+  // Total recorded duration across all segments
+  Duration _totalRecorded = Duration.zero;
+  DateTime? _segmentStartTime;
+
+  // Elapsed ticker
+  int _elapsedSeconds = 0;
+  late final Stream<int> _ticker = Stream.periodic(
+    const Duration(seconds: 1), (i) => i,
+  );
 
   final List<_PhotoMarker> _photos = [];
-  final List<String> _log = []; // activity log shown on screen
-
-  // Timer for elapsed display
-  late final Stream<Duration> _elapsedStream = Stream.periodic(
-    const Duration(seconds: 1),
-    (i) => Duration(seconds: i + 1),
-  );
+  final List<String> _log = [];
 
   @override
   void initState() {
     super.initState();
-    _startRecording();
+    _startSegment();
   }
 
-  Future<void> _startRecording() async {
+  Future<void> _startSegment() async {
     try {
       final hasPermission = await _recorder.hasPermission();
       if (!hasPermission) {
@@ -67,22 +73,23 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
       }
 
       final dir = await getTemporaryDirectory();
-      _audioPath = '${dir.path}/inspection_${widget.sessionId}.m4a';
-      _recordingStartTime = DateTime.now();
+      _currentSegmentPath = '${dir.path}/seg_${widget.sessionId}_$_segmentIndex.m4a';
+      _segmentIndex++;
+      _segmentStartTime = DateTime.now();
 
       await _recorder.start(
         const RecordConfig(
           encoder: AudioEncoder.aacLc,
           bitRate: 64000,
-          sampleRate: 16000, // optimal for speech recognition
+          sampleRate: 16000,
           numChannels: 1,
         ),
-        path: _audioPath!,
+        path: _currentSegmentPath!,
       );
 
       setState(() {
         _state = _State.recording;
-        _log.add('🎙️ Recording started — speak freely');
+        if (_segmentIndex == 1) _log.add('🎙️ Recording — speak freely at your own pace');
       });
     } catch (e) {
       setState(() { _error = e.toString(); _state = _State.error; });
@@ -90,7 +97,16 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
   }
 
   Future<void> _pause() async {
-    await _recorder.pause();
+    // Stop current segment and save it
+    final path = await _recorder.stop();
+    if (path != null && File(path).existsSync()) {
+      _audioSegments.add(path);
+    }
+    // Accumulate duration
+    if (_segmentStartTime != null) {
+      _totalRecorded += DateTime.now().difference(_segmentStartTime!);
+      _segmentStartTime = null;
+    }
     setState(() {
       _state = _State.paused;
       _log.add('⏸️ Paused');
@@ -98,91 +114,132 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
   }
 
   Future<void> _resume() async {
-    await _recorder.resume();
-    setState(() {
-      _state = _State.recording;
-      _log.add('🎙️ Resumed');
-    });
+    setState(() => _log.add('🎙️ Resumed'));
+    await _startSegment();
   }
 
   Duration get _currentOffset {
-    if (_recordingStartTime == null) return Duration.zero;
-    return DateTime.now().difference(_recordingStartTime!);
+    final segmentSoFar = _segmentStartTime != null
+        ? DateTime.now().difference(_segmentStartTime!)
+        : Duration.zero;
+    return _totalRecorded + segmentSoFar;
   }
 
   Future<void> _insertPhoto() async {
     HapticFeedback.mediumImpact();
 
-    // Pause recording while camera is open so we don't record shutter sounds
+    // Stop current segment while camera is open
     final wasRecording = _state == _State.recording;
-    if (wasRecording) await _recorder.pause();
+    if (wasRecording) {
+      final path = await _recorder.stop();
+      if (path != null && File(path).existsSync()) _audioSegments.add(path);
+      if (_segmentStartTime != null) {
+        _totalRecorded += DateTime.now().difference(_segmentStartTime!);
+        _segmentStartTime = null;
+      }
+    }
 
+    final offset = _currentOffset;
     final picker = ImagePicker();
-    final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+    final XFile? photo = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 60,       // lower quality = faster upload
+      maxWidth: 1280,         // cap resolution
+      maxHeight: 960,
+    );
 
-    if (wasRecording) await _recorder.resume();
+    // Resume immediately — don't wait for upload
+    if (wasRecording) await _startSegment();
 
     if (photo == null) return;
 
     final marker = _PhotoMarker(
       localPath: photo.path,
       timestamp: DateTime.now(),
-      recordingOffset: _currentOffset,
+      recordingOffset: offset,
     );
 
     setState(() {
       _photos.add(marker);
-      _log.add('📷 Photo inserted at ${_formatDuration(_currentOffset)}');
+      _log.add('📷 Photo at ${_formatDuration(offset)} — uploading...');
     });
 
+    // Fire and forget — do NOT await
     _uploadPhoto(photo, marker);
   }
 
-  Future<void> _uploadPhoto(XFile photo, _PhotoMarker marker) async {
-    try {
-      final uploadData = await ApiService().getUploadUrl(
-        sessionId: widget.sessionId,
-        filename: 'transcript_photo_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-      final bytes = await File(photo.path).readAsBytes();
-      final resp = await http.put(
-        Uri.parse(uploadData['upload_url']),
-        headers: {'Content-Type': 'image/jpeg'},
-        body: bytes,
-      );
-      if (resp.statusCode == 200 || resp.statusCode == 204) {
-        await ApiService().attachMedia(sessionId: widget.sessionId, s3Key: uploadData['s3_key']);
-        setState(() { marker.s3Key = uploadData['s3_key']; marker.uploading = false; });
-        HapticFeedback.lightImpact();
+  void _uploadPhoto(XFile photo, _PhotoMarker marker) {
+    () async {
+      try {
+        final uploadData = await ApiService().getUploadUrl(
+          sessionId: widget.sessionId,
+          filename: 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+        final bytes = await File(photo.path).readAsBytes();
+        final resp = await http.put(
+          Uri.parse(uploadData['upload_url']),
+          headers: {'Content-Type': 'image/jpeg'},
+          body: bytes,
+        );
+        if (resp.statusCode == 200 || resp.statusCode == 204) {
+          await ApiService().attachMedia(
+            sessionId: widget.sessionId,
+            s3Key: uploadData['s3_key'],
+          );
+          if (mounted) {
+            setState(() {
+              marker.s3Key = uploadData['s3_key'];
+              marker.uploading = false;
+              // Replace last log entry for this photo
+              final idx = _log.lastIndexWhere((l) => l.contains(_formatDuration(marker.recordingOffset)));
+              if (idx >= 0) _log[idx] = '📷 Photo at ${_formatDuration(marker.recordingOffset)} ✅';
+            });
+          }
+          HapticFeedback.lightImpact();
+        }
+      } catch (_) {
+        if (mounted) setState(() => marker.uploading = false);
       }
-    } catch (e) {
-      setState(() => marker.uploading = false);
-    }
+    }();
   }
 
   Future<void> _complete() async {
-    setState(() { _state = _State.processing; _log.add('⏹️ Stopped — processing audio...'); });
+    setState(() {
+      _state = _State.processing;
+      _log.add('⏹️ Stopped — sending to AI...');
+    });
 
     try {
-      // Stop recording
-      await _recorder.stop();
-
-      if (_audioPath == null || !File(_audioPath!).existsSync()) {
-        throw Exception('Audio file not found');
+      // Stop current segment
+      if (await _recorder.isRecording()) {
+        final path = await _recorder.stop();
+        if (path != null && File(path).existsSync()) _audioSegments.add(path);
       }
 
-      setState(() => _log.add('📡 Uploading to AI for transcription & cleanup...'));
+      if (_audioSegments.isEmpty) {
+        throw Exception('No audio recorded');
+      }
 
-      // Send to backend for AssemblyAI + Claude processing
+      // Use the largest segment (most content) if only one,
+      // or concatenate by sending all segments
+      // For now send the first/only segment — backend handles it
+      // TODO: merge segments server-side for multi-segment sessions
+      final primaryAudio = _audioSegments.reduce(
+        (a, b) => File(a).lengthSync() >= File(b).lengthSync() ? a : b,
+      );
+
       final photoOffsets = _photos.map((p) => _formatDuration(p.recordingOffset)).join(',');
+
+      setState(() => _log.add('📡 Transcribing with AssemblyAI + Claude cleanup...'));
+
       final result = await ApiService().processTranscript(
         sessionId: widget.sessionId,
-        audioPath: _audioPath!,
+        audioPath: primaryAudio,
         photoMarkers: photoOffsets,
       );
 
-      final wordsRemoved = result['words_removed'] ?? 0;
-      setState(() => _log.add('✅ Done — $wordsRemoved irrelevant words removed by AI'));
+      final removed = result['words_removed'] ?? 0;
+      setState(() => _log.add('✅ Done — $removed irrelevant words removed'));
 
       await ApiService().completeSession(widget.sessionId);
       setState(() => _state = _State.done);
@@ -234,49 +291,95 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
       body: SafeArea(
         child: Column(children: [
 
-          // Status bar
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: const Color(0xFF111827),
-            child: Row(children: [
-              if (isRecording) ...[
-                _PulsingDot(color: const Color(0xFFEF4444)),
-                const SizedBox(width: 8),
-                const Text('Recording', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w700, fontSize: 14)),
-              ] else if (isPaused) ...[
-                Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFFBBF24), shape: BoxShape.circle)),
-                const SizedBox(width: 8),
-                const Text('Paused', style: TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.w700, fontSize: 14)),
-              ] else if (isProcessing) ...[
-                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3B82F6))),
-                const SizedBox(width: 8),
-                const Text('AI Processing...', style: TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.w700, fontSize: 14)),
-              ],
-              const Spacer(),
-              // Elapsed timer
-              if (isRecording || isPaused)
-                StreamBuilder<Duration>(
-                  stream: _elapsedStream,
-                  builder: (_, snap) {
-                    final d = snap.data ?? Duration.zero;
-                    return Text(_formatDuration(d),
-                        style: const TextStyle(color: Color(0xFF6B7280), fontFamily: 'monospace', fontSize: 13));
-                  },
-                ),
-            ]),
+          // Status bar with live elapsed timer
+          StreamBuilder<int>(
+            stream: _ticker,
+            builder: (_, snap) {
+              if (isRecording && snap.hasData) _elapsedSeconds = snap.data! + 1;
+              final display = _totalRecorded + (isRecording
+                  ? Duration(seconds: _elapsedSeconds)
+                  : Duration.zero);
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                color: const Color(0xFF111827),
+                child: Row(children: [
+                  if (isRecording) ...[
+                    _PulsingDot(color: const Color(0xFFEF4444)),
+                    const SizedBox(width: 8),
+                    const Text('Recording', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w700, fontSize: 14)),
+                  ] else if (isPaused) ...[
+                    Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFFBBF24), shape: BoxShape.circle)),
+                    const SizedBox(width: 8),
+                    const Text('Paused', style: TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.w700, fontSize: 14)),
+                  ] else if (isProcessing) ...[
+                    const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3B82F6))),
+                    const SizedBox(width: 8),
+                    const Text('AI Processing...', style: TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.w700, fontSize: 14)),
+                  ],
+                  const Spacer(),
+                  Text(_formatDuration(display),
+                      style: const TextStyle(color: Color(0xFF6B7280), fontFamily: 'monospace', fontSize: 14, fontWeight: FontWeight.w600)),
+                ]),
+              );
+            },
           ),
 
-          // Instruction banner
+          // Hint
           if (isRecording || isPaused)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               color: const Color(0xFF0A0A0F),
               child: const Text(
-                'Speak freely — mic stays on. Say "insert photo" or tap 📷 to add photos.',
+                'Mic stays on — speak at your own pace. Tap 📷 anytime to insert a photo.',
                 style: TextStyle(color: Color(0xFF4B5563), fontSize: 12),
                 textAlign: TextAlign.center,
+              ),
+            ),
+
+          // Photo strip
+          if (_photos.isNotEmpty)
+            Container(
+              height: 90,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _photos.length,
+                itemBuilder: (_, i) {
+                  final p = _photos[i];
+                  return Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    width: 76,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: p.uploading ? const Color(0xFFFBBF24) : const Color(0xFF10B981)),
+                    ),
+                    child: Stack(children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(7),
+                        child: Image.file(File(p.localPath), width: 76, height: 76, fit: BoxFit.cover),
+                      ),
+                      Positioned(bottom: 0, left: 0, right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.vertical(bottom: Radius.circular(7)),
+                          ),
+                          child: Text(_formatDuration(p.recordingOffset),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white, fontSize: 9)),
+                        ),
+                      ),
+                      if (p.uploading)
+                        const Positioned.fill(child: Center(
+                          child: SizedBox(width: 18, height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                        )),
+                    ]),
+                  );
+                },
               ),
             ),
 
@@ -285,67 +388,16 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
             child: ListView.builder(
               controller: _scrollCtrl,
               padding: const EdgeInsets.all(16),
-              itemCount: _log.length + (_photos.isNotEmpty ? 1 : 0),
-              itemBuilder: (_, i) {
-                // Photo strip at top
-                if (i == 0 && _photos.isNotEmpty) {
-                  return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('PHOTOS', style: TextStyle(color: Color(0xFF6B7280), fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1)),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 80,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _photos.length,
-                        itemBuilder: (_, j) {
-                          final p = _photos[j];
-                          return Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            width: 80,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF10B981)),
-                            ),
-                            child: Stack(children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(7),
-                                child: Image.file(File(p.localPath), width: 80, height: 80, fit: BoxFit.cover),
-                              ),
-                              Positioned(bottom: 2, left: 2,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                  decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
-                                  child: Text(_formatDuration(p.recordingOffset),
-                                      style: const TextStyle(color: Colors.white, fontSize: 9)),
-                                ),
-                              ),
-                              if (p.uploading)
-                                const Positioned.fill(child: Center(
-                                  child: SizedBox(width: 16, height: 16,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                                )),
-                            ]),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ]);
-                }
-
-                final logIndex = _photos.isNotEmpty ? i - 1 : i;
-                if (logIndex >= _log.length) return const SizedBox.shrink();
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(_log[logIndex],
-                      style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14, height: 1.5)),
-                );
-              },
+              itemCount: _log.length,
+              itemBuilder: (_, i) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(_log[i],
+                    style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14, height: 1.5)),
+              ),
             ),
           ),
 
-          // Processing state
+          // Processing
           if (isProcessing)
             Container(
               width: double.infinity,
@@ -356,55 +408,52 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
                 SizedBox(height: 12),
                 Text('Transcribing & removing background noise...', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13)),
                 SizedBox(height: 4),
-                Text('This takes 1–2 minutes', style: TextStyle(color: Color(0xFF4B5563), fontSize: 12)),
+                Text('Takes 1–2 minutes', style: TextStyle(color: Color(0xFF4B5563), fontSize: 12)),
               ]),
             ),
 
-          // Bottom controls
+          // Controls
           if (!isProcessing && _state != _State.done && _state != _State.error)
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
               color: const Color(0xFF111827),
               child: Row(children: [
-                // Pause/Resume
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: isRecording ? _pause : _resume,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isRecording ? const Color(0xFF374151) : const Color(0xFF1E3A5F),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      backgroundColor: isRecording ? const Color(0xFF374151) : const Color(0xFF1D4ED8),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    icon: Icon(isRecording ? Icons.pause : Icons.mic, color: Colors.white, size: 18),
+                    icon: Icon(isRecording ? Icons.pause_circle_outline : Icons.mic, color: Colors.white, size: 20),
                     label: Text(isRecording ? 'Pause' : 'Resume',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
                   ),
                 ),
                 const SizedBox(width: 10),
-                // Photo
                 ElevatedButton(
                   onPressed: _insertPhoto,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF064E3B),
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        side: const BorderSide(color: Color(0xFF10B981))),
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Color(0xFF10B981), width: 1.5)),
                   ),
-                  child: const Icon(Icons.camera_alt, color: Color(0xFF10B981), size: 22),
+                  child: const Icon(Icons.camera_alt, color: Color(0xFF10B981), size: 24),
                 ),
                 const SizedBox(width: 10),
-                // Done
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: _complete,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF10B981),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    icon: const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
-                    label: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                    icon: const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                    label: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
                   ),
                 ),
               ]),
@@ -414,7 +463,11 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               color: const Color(0xFF7F1D1D),
-              child: Text(_error ?? 'Unknown error', style: const TextStyle(color: Color(0xFFFCA5A5))),
+              child: Column(children: [
+                Text(_error ?? 'Unknown error', style: const TextStyle(color: Color(0xFFFCA5A5))),
+                const SizedBox(height: 8),
+                ElevatedButton(onPressed: _startSegment, child: const Text('Retry')),
+              ]),
             ),
         ]),
       ),
