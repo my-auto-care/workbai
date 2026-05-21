@@ -155,6 +155,21 @@ async def process_transcript(
     vehicle = result.get("vehicle", {})
     logger.info(f"Clean transcript: {len(clean_transcript)} chars, extracted vehicle: {vehicle}")
 
+    # Auto-fetch recalls
+    recalls = []
+    complaints = []
+    yr = vehicle.get("year") or session.vehicle_year
+    mk = vehicle.get("make") or session.vehicle_make
+    mo = vehicle.get("model") or session.vehicle_model
+    if yr and mk and mo:
+        try:
+            from app.api.vehicle_lookup import _get_recalls_and_complaints
+            import asyncio
+            recalls, complaints = await _get_recalls_and_complaints(yr, mk, mo)
+            logger.info(f"Fetched {len(recalls)} recalls")
+        except Exception as e:
+            logger.warning(f"Recall fetch failed: {e}")
+
     # Update session with any newly extracted vehicle info (only fill blanks)
     updated = False
     if vehicle.get("year") and not session.vehicle_year:
@@ -181,6 +196,8 @@ async def process_transcript(
             "clean_length": len(clean_transcript),
             "vehicle_extracted": vehicle,
             "photo_markers": photo_markers.split(",") if photo_markers else [],
+            "recalls": recalls,
+            "complaints": complaints,
         }
     )
     db.add(finding)
@@ -205,4 +222,7 @@ async def process_transcript(
         "clean_length": len(clean_transcript),
         "words_removed": len(raw_transcript.split()) - len(clean_transcript.split()),
         "vehicle_extracted": vehicle,
+        "recalls": recalls,
+        "recall_count": len(recalls),
+        "complaint_count": len(complaints),
     }
