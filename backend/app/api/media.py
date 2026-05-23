@@ -10,6 +10,8 @@ from app.db.models import Media, MediaType
 
 router = APIRouter()
 
+BUCKET = os.getenv("DO_SPACES_BUCKET_DATA", "workbay-data")
+
 def get_spaces_client():
     return boto3.client(
         "s3",
@@ -18,6 +20,15 @@ def get_spaces_client():
         aws_access_key_id=os.getenv("DO_SPACES_ACCESS_KEY"),
         aws_secret_access_key=os.getenv("DO_SPACES_SECRET_KEY"),
         config=Config(signature_version="s3v4")
+    )
+
+def presigned_read_url(s3_key: str, expires: int = 3600) -> str:
+    """Generate a presigned GET URL for a Spaces object."""
+    client = get_spaces_client()
+    return client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": BUCKET, "Key": s3_key},
+        ExpiresIn=expires,
     )
 
 class UploadUrlRequest(BaseModel):
@@ -35,11 +46,10 @@ class MediaAttach(BaseModel):
 @router.post("/media/upload-url")
 def get_upload_url(body: UploadUrlRequest):
     client = get_spaces_client()
-    bucket = os.getenv("DO_SPACES_BUCKET_DATA", "workbay-data")
     s3_key = f"sessions/{body.session_id}/{body.media_type}/{uuid.uuid4()}_{body.filename}"
     url = client.generate_presigned_url(
         "put_object",
-        Params={"Bucket": bucket, "Key": s3_key, "ContentType": body.content_type},
+        Params={"Bucket": BUCKET, "Key": s3_key, "ContentType": body.content_type},
         ExpiresIn=900
     )
     return {"upload_url": url, "s3_key": s3_key}
@@ -56,4 +66,17 @@ def attach_media(media_id: uuid.UUID, body: MediaAttach, db: Session = Depends(g
     db.add(media)
     db.commit()
     db.refresh(media)
-    return {"id": str(media.id), "s3_key": media.s3_key, "media_type": media.media_type}
+    return {
+        "id": str(media.id),
+        "s3_key": media.s3_key,
+        "media_type": media.media_type,
+        "url": presigned_read_url(media.s3_key),
+    }
+
+@router.get("/media/{media_id}/url")
+def get_media_url(media_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Get a fresh presigned read URL for any stored media item."""
+    media = db.get(Media, media_id)
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
+    return {"id": str(media.id), "url": presigned_read_url(media.s3_key)}

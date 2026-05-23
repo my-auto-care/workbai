@@ -55,6 +55,16 @@ def _session_dict(s):
         "completed_at": s.completed_at,
     }
 
+def _media_dict(m, with_url: bool = False):
+    d = {"id": str(m.id), "media_type": m.media_type, "s3_key": m.s3_key}
+    if with_url:
+        try:
+            from app.api.media import presigned_read_url
+            d["url"] = presigned_read_url(m.s3_key)
+        except Exception:
+            d["url"] = None
+    return d
+
 @router.get("/sessions")
 def list_sessions(
     status: Optional[str] = Query(None),
@@ -103,7 +113,7 @@ def get_session(session_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Session not found")
     d = _session_dict(session)
     d["findings"] = [{"id": str(f.id), "checklist_item_id": f.checklist_item_id, "transcript": f.transcript, "condition": f.condition, "structured_data": f.structured_data} for f in session.findings]
-    d["media"] = [{"id": str(m.id), "media_type": m.media_type, "s3_key": m.s3_key} for m in session.media]
+    d["media"] = [_media_dict(m, with_url=True) for m in session.media]
     return d
 
 @router.post("/sessions/{session_id}/start")
@@ -173,6 +183,7 @@ def get_report(session_id: uuid.UUID, db: Session = Depends(get_db)):
             "vehicle_make": session.vehicle_make,
             "vehicle_model": session.vehicle_model,
             "vehicle_vin": session.vehicle_vin,
+            "vehicle_mileage": session.vehicle_mileage,
             "findings": [
                 {
                     "id": str(f.id),
@@ -180,7 +191,7 @@ def get_report(session_id: uuid.UUID, db: Session = Depends(get_db)):
                     "transcript": f.transcript,
                     "condition": f.condition,
                     "structured_data": f.structured_data,
-                    "media": [{"id": str(m.id), "media_type": m.media_type, "s3_key": m.s3_key} for m in f.media]
+                    "media": [_media_dict(m, with_url=True) for m in f.media]
                 } for f in session.findings
             ]
         }

@@ -170,6 +170,24 @@
       "languageVersion": "3.5"
     },
     {
+      "name": "flutter_sound",
+      "rootUri": "file:///root/.pub-cache/hosted/pub.dev/flutter_sound-9.28.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    },
+    {
+      "name": "flutter_sound_platform_interface",
+      "rootUri": "file:///root/.pub-cache/hosted/pub.dev/flutter_sound_platform_interface-9.28.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    },
+    {
+      "name": "flutter_sound_web",
+      "rootUri": "file:///root/.pub-cache/hosted/pub.dev/flutter_sound_web-9.28.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    },
+    {
       "name": "flutter_test",
       "rootUri": "file:///opt/flutter/packages/flutter_test",
       "packageUri": "lib/",
@@ -183,7 +201,7 @@
     },
     {
       "name": "flutter_webrtc",
-      "rootUri": "file:///root/.pub-cache/hosted/pub.dev/flutter_webrtc-0.12.12+hotfix.1",
+      "rootUri": "../flutter_webrtc_local",
       "packageUri": "lib/",
       "languageVersion": "3.3"
     },
@@ -282,6 +300,12 @@
       "rootUri": "file:///root/.pub-cache/hosted/pub.dev/livekit_client-2.3.6",
       "packageUri": "lib/",
       "languageVersion": "3.3"
+    },
+    {
+      "name": "logger",
+      "rootUri": "file:///root/.pub-cache/hosted/pub.dev/logger-2.7.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
     },
     {
       "name": "logging",
@@ -572,7 +596,7 @@
       "languageVersion": "3.3"
     }
   ],
-  "generated": "2026-05-18T14:04:03.757266Z",
+  "generated": "2026-05-21T22:36:18.685076Z",
   "generator": "pub",
   "generatorVersion": "3.5.4",
   "flutterRoot": "file:///opt/flutter",

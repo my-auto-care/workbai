@@ -1,0 +1,14 @@
+# Flutter/Dart build artifacts
+.dart_tool/flutter_build/
+build/
+
+# Android generated/local files
+android/.gradle/
+android/local.properties
+android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
+# Local WebRTC fork (vendored, large binary diffs)
+# flutter_webrtc_local/   <-- kept tracked (local fork, intentional)
+
+# pubspec.lock kept tracked for reproducible builds
+# pubspec.lock

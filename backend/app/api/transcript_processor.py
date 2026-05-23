@@ -2,8 +2,10 @@
 Transcript Processing Endpoint
 Receives an audio file, transcribes via AssemblyAI, then uses Claude to
 strip background noise/banter, extract vehicle info, and return only inspection-relevant content.
+Auto-looks up spoken plate numbers via VehicleDatabases if no VIN is found.
 """
 import os
+import re
 import json
 import logging
 import asyncio
@@ -20,9 +22,8 @@ router = APIRouter()
 logger = logging.getLogger("workbay.transcript")
 
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-ASSEMBLYAI_BASE = "https://api.assemblyai.com/v2"
-
+ANTHROPIC_API_KEY  = os.getenv("ANTHROPIC_API_KEY")
+ASSEMBLYAI_BASE    = "https://api.assemblyai.com/v2"
 
 CLAUDE_PROMPT = """You are an automotive inspection transcript processor.
 
@@ -37,7 +38,9 @@ TASK 1 — Clean the transcript:
 TASK 2 — Extract vehicle info mentioned in the transcript:
 - Look for year (4-digit number like 2019, 2022), make (Ford, Toyota, etc.), model (F-150, Camry, etc.)
 - Look for mileage (e.g. "at 87,000 miles", "87k")
-- Look for VIN if mentioned
+- Look for VIN if mentioned (17 characters)
+- Look for license plate number — any combination of letters and numbers the tech mentions as a tag/plate/license
+- Look for US state if mentioned alongside the plate (e.g. "South Carolina plate APY312")
 - Only extract if clearly stated — do not guess
 
 Return ONLY valid JSON in this exact format:
@@ -48,10 +51,38 @@ Return ONLY valid JSON in this exact format:
     "make": "<string or null>",
     "model": "<string or null>",
     "mileage": <integer or null>,
-    "vin": "<string or null>"
+    "vin": "<string or null>",
+    "plate": "<string or null>",
+    "plate_state": "<2-letter state code or null>"
   }
 }"""
 
+
+# ── US state name → abbreviation map ─────────────────────────────────────
+
+STATE_MAP = {
+    "alabama":"AL","alaska":"AK","arizona":"AZ","arkansas":"AR","california":"CA",
+    "colorado":"CO","connecticut":"CT","delaware":"DE","florida":"FL","georgia":"GA",
+    "hawaii":"HI","idaho":"ID","illinois":"IL","indiana":"IN","iowa":"IA","kansas":"KS",
+    "kentucky":"KY","louisiana":"LA","maine":"ME","maryland":"MD","massachusetts":"MA",
+    "michigan":"MI","minnesota":"MN","mississippi":"MS","missouri":"MO","montana":"MT",
+    "nebraska":"NE","nevada":"NV","new hampshire":"NH","new jersey":"NJ","new mexico":"NM",
+    "new york":"NY","north carolina":"NC","north dakota":"ND","ohio":"OH","oklahoma":"OK",
+    "oregon":"OR","pennsylvania":"PA","rhode island":"RI","south carolina":"SC",
+    "south dakota":"SD","tennessee":"TN","texas":"TX","utah":"UT","vermont":"VT",
+    "virginia":"VA","washington":"WA","west virginia":"WV","wisconsin":"WI","wyoming":"WY",
+}
+
+def _normalize_state(s: str) -> str:
+    if not s:
+        return "FL"
+    s = s.strip()
+    if len(s) == 2:
+        return s.upper()
+    return STATE_MAP.get(s.lower(), "FL")
+
+
+# ── AssemblyAI ────────────────────────────────────────────────────────────
 
 async def _upload_to_assemblyai(audio_bytes: bytes, content_type: str) -> str:
     headers = {"authorization": ASSEMBLYAI_API_KEY, "content-type": content_type}
@@ -67,7 +98,7 @@ async def _transcribe_assemblyai(upload_url: str) -> str:
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.post(f"{ASSEMBLYAI_BASE}/transcript", headers=headers, json={
             "audio_url": upload_url,
-            "speech_models": ["universal-2"],
+            "speech_model": "universal-2",
             "punctuate": True,
             "format_text": True,
             "filter_profanity": False,
@@ -92,8 +123,9 @@ async def _transcribe_assemblyai(upload_url: str) -> str:
     raise HTTPException(status_code=504, detail="Transcription timed out")
 
 
+# ── Claude ────────────────────────────────────────────────────────────────
+
 def _process_with_claude(raw_transcript: str, existing_vehicle: str) -> dict:
-    """Clean transcript and extract vehicle info in one Claude call."""
     if not ANTHROPIC_API_KEY:
         return {"transcript": raw_transcript, "vehicle": {}}
 
@@ -108,7 +140,6 @@ def _process_with_claude(raw_transcript: str, existing_vehicle: str) -> dict:
         }]
     )
     text = response.content[0].text.strip()
-    # Strip markdown code fences if present
     if text.startswith("```"):
         text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
     try:
@@ -116,6 +147,26 @@ def _process_with_claude(raw_transcript: str, existing_vehicle: str) -> dict:
     except Exception:
         return {"transcript": raw_transcript, "vehicle": {}}
 
+
+# ── Plate → VIN lookup ────────────────────────────────────────────────────
+
+async def _plate_to_vin(plate: str, state: str) -> str | None:
+    """VehicleDatabases plate decode → VIN."""
+    from app.api.vehicle_lookup import VDB_BASE, _h
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(
+                f"{VDB_BASE}/license-decode/{plate.upper()}/{state.upper()}",
+                headers=_h(),
+            )
+            if r.status_code == 200 and r.json().get("status") == "success":
+                return r.json().get("data", {}).get("intro", {}).get("vin")
+    except Exception as e:
+        logger.warning(f"Plate lookup failed for {plate}/{state}: {e}")
+    return None
+
+
+# ── Main endpoint ─────────────────────────────────────────────────────────
 
 @router.post("/sessions/{session_id}/process-transcript")
 async def process_transcript(
@@ -155,36 +206,49 @@ async def process_transcript(
     vehicle = result.get("vehicle", {})
     logger.info(f"Clean transcript: {len(clean_transcript)} chars, extracted vehicle: {vehicle}")
 
-    # Auto-fetch vehicle data if we have a VIN
+    # ── Resolve VIN: direct > plate lookup ───────────────────────────────
+    vin = vehicle.get("vin") or session.vehicle_vin
+
+    if not vin and vehicle.get("plate"):
+        plate = vehicle["plate"].upper().replace(" ", "")
+        state = _normalize_state(vehicle.get("plate_state") or "FL")
+        logger.info(f"No VIN found — looking up plate {plate}/{state}")
+        vin = await _plate_to_vin(plate, state)
+        if vin:
+            logger.info(f"Plate {plate} resolved to VIN {vin}")
+            vehicle["vin"] = vin
+
+    # ── Full VDB decode if we have a VIN ─────────────────────────────────
     vehicle_full = {}
     recalls = []
-    complaints = []
-    vin = vehicle.get("vin") or session.vehicle_vin
+    repairs = []
+    maintenance = {}
+    warranty = {}
+
     if vin and len(str(vin)) == 17:
         try:
             from app.api.vehicle_lookup import decode_vin_full
             vehicle_full = await decode_vin_full(vin)
-            recalls = vehicle_full.get("recalls", [])
-            complaints = vehicle_full.get("common_repairs", [])
-            logger.info(f"VIN decode: {len(recalls)} recalls, {len(complaints)} common repairs")
+            recalls     = vehicle_full.get("recalls", [])
+            repairs     = vehicle_full.get("common_repairs", [])
+            maintenance = vehicle_full.get("maintenance", {})
+            warranty    = vehicle_full.get("warranty", {})
+            logger.info(f"VDB decode: {len(recalls)} recalls, {len(repairs)} repairs")
         except Exception as e:
-            logger.warning(f"VIN full decode failed: {e}")
+            logger.warning(f"VDB full decode failed: {e}")
 
-    # Update session with any newly extracted vehicle info (only fill blanks)
+    # ── Update session fields (only fill blanks) ──────────────────────────
     updated = False
-    if vehicle.get("year") and not session.vehicle_year:
-        session.vehicle_year = vehicle["year"]; updated = True
-    if vehicle.get("make") and not session.vehicle_make:
-        session.vehicle_make = vehicle["make"]; updated = True
-    if vehicle.get("model") and not session.vehicle_model:
-        session.vehicle_model = vehicle["model"]; updated = True
-    if vehicle.get("mileage") and not session.vehicle_mileage:
-        session.vehicle_mileage = vehicle["mileage"]; updated = True
-    if vehicle.get("vin") and not session.vehicle_vin:
-        session.vehicle_vin = vehicle["vin"]; updated = True
+    for attr, key in [("vehicle_year","year"),("vehicle_make","make"),("vehicle_model","model"),("vehicle_mileage","mileage"),("vehicle_vin","vin")]:
+        if vehicle.get(key) and not getattr(session, attr):
+            setattr(session, attr, vehicle[key]); updated = True
+    # Also update VIN from plate lookup
+    if vin and not session.vehicle_vin:
+        session.vehicle_vin = vin; updated = True
     if updated:
         db.commit()
 
+    # ── Save finding ──────────────────────────────────────────────────────
     finding = Finding(
         session_id=session_id,
         checklist_item_id="transcript_mode",
@@ -197,8 +261,9 @@ async def process_transcript(
             "vehicle_extracted": vehicle,
             "photo_markers": photo_markers.split(",") if photo_markers else [],
             "recalls": recalls,
-            "common_repairs": complaints,
-            "maintenance": vehicle_full.get("maintenance", {}),
+            "common_repairs": repairs,
+            "maintenance": maintenance,
+            "warranty": warranty,
             "vehicle_detail": vehicle_full.get("vehicle", {}),
         }
     )
@@ -206,12 +271,9 @@ async def process_transcript(
     db.commit()
     db.refresh(finding)
 
-    # Link unattached session media to this finding
+    # ── Link unattached media ─────────────────────────────────────────────
     from app.db.models import Media
-    unlinked = db.query(Media).filter(
-        Media.session_id == session_id,
-        Media.finding_id == None
-    ).all()
+    unlinked = db.query(Media).filter(Media.session_id == session_id, Media.finding_id == None).all()
     for m in unlinked:
         m.finding_id = finding.id
     if unlinked:
@@ -224,7 +286,8 @@ async def process_transcript(
         "clean_length": len(clean_transcript),
         "words_removed": len(raw_transcript.split()) - len(clean_transcript.split()),
         "vehicle_extracted": vehicle,
+        "vin_resolved": vin,
         "recalls": recalls,
         "recall_count": len(recalls),
-        "complaint_count": len(complaints),
+        "repair_count": len(repairs),
     }

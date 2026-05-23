@@ -18,6 +18,10 @@ class ApiService {
     if (_authToken != null) 'Authorization': 'Bearer $_authToken',
   };
 
+  Map<String, String> get _hNoContent => {
+    if (_authToken != null) 'Authorization': 'Bearer $_authToken',
+  };
+
   Future<List<Map<String, dynamic>>> getSessions({String? status, String? technicianId}) async {
     var url = '$kBaseUrl/sessions';
     final params = <String>[];
@@ -134,19 +138,61 @@ class ApiService {
   }) async {
     final file = File(audioPath);
     final bytes = await file.readAsBytes();
-
     final request = http.MultipartRequest(
       'POST',
       Uri.parse('$kBaseUrl/sessions/$sessionId/process-transcript'),
     );
     if (_authToken != null) request.headers['Authorization'] = 'Bearer $_authToken';
-    request.files.add(http.MultipartFile.fromBytes('audio', bytes,
-        filename: 'inspection.m4a'));
+    request.files.add(http.MultipartFile.fromBytes('audio', bytes, filename: 'inspection.m4a'));
     request.fields['photo_markers'] = photoMarkers;
-
     final streamed = await request.send().timeout(const Duration(minutes: 15));
     final body = await streamed.stream.bytesToString();
     if (streamed.statusCode == 200) return jsonDecode(body);
     throw Exception('Transcript processing failed: $body');
+  }
+
+  // ── Vehicle Lookup — VIN decode ──────────────────────────────────────────
+
+  /// Decode a VIN → full vehicle info + recalls + maintenance + repairs + warranty
+  Future<Map<String, dynamic>> decodeVin(String vin) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/vehicle/decode-vin'));
+    request.headers.addAll(_hNoContent);
+    request.fields['vin'] = vin.trim().toUpperCase();
+    final streamed = await request.send().timeout(const Duration(seconds: 30));
+    final body = await streamed.stream.bytesToString();
+    if (streamed.statusCode == 200) return jsonDecode(body);
+    throw Exception('VIN decode failed: $body');
+  }
+
+  // ── Vehicle Lookup — License plate photo → auto-fill ────────────────────
+
+  /// Photo of license plate → OCR → plate-to-VIN → full vehicle decode
+  Future<Map<String, dynamic>> ocrPlateFromFile(File image, {String state = 'FL'}) async {
+    final bytes = await image.readAsBytes();
+    final filename = image.path.split('/').last;
+    final request = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/vehicle/lookup-plate-vin'));
+    request.headers.addAll(_hNoContent);
+    request.fields['state'] = state;
+    request.fields['region'] = 'us';
+    request.files.add(http.MultipartFile.fromBytes('image', bytes, filename: filename));
+    final streamed = await request.send().timeout(const Duration(seconds: 30));
+    final body = await streamed.stream.bytesToString();
+    if (streamed.statusCode == 200) return jsonDecode(body);
+    throw Exception('Plate OCR failed: $body');
+  }
+
+  // ── Vehicle Lookup — VIN tag photo → auto-fill ───────────────────────────
+
+  /// Photo of VIN sticker/tag → VIN OCR → full vehicle decode
+  Future<Map<String, dynamic>> ocrVinFromFile(File image) async {
+    final bytes = await image.readAsBytes();
+    final filename = image.path.split('/').last;
+    final request = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/vehicle/ocr-vin'));
+    request.headers.addAll(_hNoContent);
+    request.files.add(http.MultipartFile.fromBytes('image', bytes, filename: filename));
+    final streamed = await request.send().timeout(const Duration(seconds: 30));
+    final body = await streamed.stream.bytesToString();
+    if (streamed.statusCode == 200) return jsonDecode(body);
+    throw Exception('VIN OCR failed: $body');
   }
 }
