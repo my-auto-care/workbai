@@ -46,7 +46,8 @@ class MediaAttach(BaseModel):
 @router.post("/media/upload-url")
 def get_upload_url(body: UploadUrlRequest):
     client = get_spaces_client()
-    s3_key = f"sessions/{body.session_id}/{body.media_type}/{uuid.uuid4()}_{body.filename}"
+    media_type_val = body.media_type.value if hasattr(body.media_type, 'value') else str(body.media_type)
+    s3_key = f"sessions/{body.session_id}/{media_type_val}/{uuid.uuid4()}_{body.filename}"
     url = client.generate_presigned_url(
         "put_object",
         Params={"Bucket": BUCKET, "Key": s3_key, "ContentType": body.content_type},
