@@ -1,10 +1,9 @@
-from contextlib import asynccontextmanager
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
 
 from app.api import sessions, checklists, media, voice, vehicle_intel, transcript_processor, vehicle_lookup
 from app.api import billing
@@ -13,43 +12,56 @@ from app.db.session import SessionLocal
 logger = logging.getLogger("workbay.scheduler")
 
 # ---------------------------------------------------------------------------
-# APScheduler – hourly session auto-expiry
+# Background asyncio task – session auto-expiry every 6 hours
 # ---------------------------------------------------------------------------
 
-scheduler = AsyncIOScheduler()
+EXPIRY_INTERVAL_HOURS = 6
 
-def _run_expiry_job():
-    """Synchronous job called by APScheduler every hour."""
-    db = SessionLocal()
-    try:
-        result = sessions.expire_stale_sessions(db)
-        logger.info(
-            "Auto-expiry job completed: %d session(s) marked abandoned. IDs: %s",
-            result["expired_count"],
-            result["expired_ids"],
-        )
-    except Exception as exc:
-        logger.exception("Auto-expiry job failed: %s", exc)
-    finally:
-        db.close()
 
+async def _expiry_loop():
+    """
+    Infinite asyncio loop that calls expire_stale_sessions() every 6 hours.
+    Runs as a background task attached to the FastAPI lifespan.
+    The first run is intentionally deferred by the full interval so startup
+    is not blocked; use POST /sessions/expire-stale for an immediate run.
+    """
+    logger.info(
+        "Session auto-expiry loop started – will run every %d hours.",
+        EXPIRY_INTERVAL_HOURS,
+    )
+    while True:
+        await asyncio.sleep(EXPIRY_INTERVAL_HOURS * 3600)
+        db = SessionLocal()
+        try:
+            result = sessions.expire_stale_sessions(db)
+            logger.info(
+                "Auto-expiry completed: %d session(s) marked abandoned. IDs: %s",
+                result["expired_count"],
+                result["expired_ids"],
+            )
+        except Exception as exc:
+            logger.exception("Auto-expiry job failed: %s", exc)
+        finally:
+            db.close()
+
+
+# ---------------------------------------------------------------------------
+# FastAPI lifespan
+# ---------------------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── startup ──────────────────────────────────────────────────────────────
-    scheduler.add_job(
-        _run_expiry_job,
-        trigger=IntervalTrigger(hours=1),
-        id="expire_stale_sessions",
-        replace_existing=True,
-        max_instances=1,
-    )
-    scheduler.start()
-    logger.info("APScheduler started – session auto-expiry runs every hour.")
+    task = asyncio.create_task(_expiry_loop())
+    logger.info("Session auto-expiry background task created.")
     yield
     # ── shutdown ─────────────────────────────────────────────────────────────
-    scheduler.shutdown(wait=False)
-    logger.info("APScheduler shut down.")
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    logger.info("Session auto-expiry background task cancelled.")
 
 
 # ---------------------------------------------------------------------------
