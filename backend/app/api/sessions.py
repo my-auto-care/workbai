@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel
 import uuid
 
@@ -64,6 +64,38 @@ def _media_dict(m, with_url: bool = False):
         except Exception:
             d["url"] = None
     return d
+
+
+# ---------------------------------------------------------------------------
+# Stale-session expiry helper – shared by the endpoint and the scheduler
+# ---------------------------------------------------------------------------
+
+def expire_stale_sessions(db: Session) -> dict:
+    """
+    Mark every in_progress session whose started_at is older than 24 hours
+    as abandoned.  Returns a dict with expired_count and expired_ids.
+    """
+    cutoff = datetime.utcnow() - timedelta(hours=24)
+    stale = (
+        db.query(InspectionSession)
+        .filter(
+            InspectionSession.status == SessionStatus.in_progress,
+            InspectionSession.started_at < cutoff,
+        )
+        .all()
+    )
+    expired_ids = []
+    for session in stale:
+        session.status = SessionStatus.abandoned
+        expired_ids.append(str(session.id))
+    if stale:
+        db.commit()
+    return {"expired_count": len(expired_ids), "expired_ids": expired_ids}
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 @router.get("/sessions")
 def list_sessions(
@@ -196,3 +228,13 @@ def get_report(session_id: uuid.UUID, db: Session = Depends(get_db)):
             ]
         }
     }
+
+
+@router.post("/sessions/expire-stale")
+def expire_stale_endpoint(db: Session = Depends(get_db)):
+    """
+    Immediately expire all in_progress sessions older than 24 hours,
+    marking them as abandoned.  Safe to call at any time; idempotent.
+    """
+    result = expire_stale_sessions(db)
+    return result
