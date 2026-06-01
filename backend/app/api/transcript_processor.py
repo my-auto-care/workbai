@@ -98,7 +98,7 @@ async def _transcribe_assemblyai(upload_url: str) -> str:
     async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.post(f"{ASSEMBLYAI_BASE}/transcript", headers=headers, json={
             "audio_url": upload_url,
-            "speech_model": "universal-2",
+            "speech_model": "best",
             "punctuate": True,
             "format_text": True,
             "filter_profanity": False,
@@ -131,7 +131,7 @@ def _process_with_claude(raw_transcript: str, existing_vehicle: str) -> dict:
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     response = client.messages.create(
-        model="claude-haiku-4-5",
+        model="claude-3-5-haiku-20241022",
         max_tokens=4000,
         system=CLAUDE_PROMPT,
         messages=[{
@@ -189,18 +189,32 @@ async def process_transcript(
     audio_bytes = await audio.read()
     content_type = audio.content_type or "audio/aac"
 
-    logger.info("Uploading to AssemblyAI...")
-    upload_url = await _upload_to_assemblyai(audio_bytes, content_type)
+    logger.info(f"Audio received: {len(audio_bytes)} bytes, content_type={content_type}")
 
-    logger.info("Transcribing...")
-    raw_transcript = await _transcribe_assemblyai(upload_url)
+    try:
+        logger.info("Uploading to AssemblyAI...")
+        upload_url = await _upload_to_assemblyai(audio_bytes, content_type)
+    except Exception as e:
+        logger.exception(f"AssemblyAI upload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"AssemblyAI upload error: {str(e)}")
+
+    try:
+        logger.info("Transcribing...")
+        raw_transcript = await _transcribe_assemblyai(upload_url)
+    except Exception as e:
+        logger.exception(f"AssemblyAI transcription failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Transcription error: {str(e)}")
     logger.info(f"Raw transcript: {len(raw_transcript)} chars")
 
     if not raw_transcript:
         raise HTTPException(status_code=422, detail="No speech detected in audio")
 
-    logger.info("Processing with Claude...")
-    result = _process_with_claude(raw_transcript, existing_vehicle)
+    try:
+        logger.info("Processing with Claude...")
+        result = _process_with_claude(raw_transcript, existing_vehicle)
+    except Exception as e:
+        logger.exception(f"Claude processing failed: {e}")
+        result = {"transcript": raw_transcript, "vehicle": {}}
 
     clean_transcript = result.get("transcript", raw_transcript)
     vehicle = result.get("vehicle", {})
