@@ -4,7 +4,7 @@ Run only against a disposable database with the current application source mount
 """
 
 from threading import Barrier, Thread
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 
@@ -135,10 +135,52 @@ with TestClient(app) as client:
         "customer_access_enabled": False,
         "reasons": [],
     }
+    with SessionLocal() as db:
+        persisted_template = db.get(ChecklistTemplate, template_id)
+        assert persisted_template is not None
+        original_approved_at = persisted_template.approved_at
+        persisted_template.approved_by_user_id = tech_id
+        db.commit()
+    approver_mismatch = client.get(f"/sessions/{session_id}/advisor-review")
+    assert approver_mismatch.status_code == 200, approver_mismatch.text
+    assert approver_mismatch.json()["current_visit_readiness"] == {
+        "ready_for_future_customer_access": False,
+        "customer_access_enabled": False,
+        "reasons": ["template_provenance_unverified"],
+    }
+    with SessionLocal() as db:
+        persisted_template = db.get(ChecklistTemplate, template_id)
+        assert persisted_template is not None
+        persisted_template.approved_by_user_id = advisor_id
+        persisted_template.approved_at = original_approved_at + timedelta(seconds=1)
+        db.commit()
+    timestamp_mismatch = client.get(f"/sessions/{session_id}/advisor-review")
+    assert timestamp_mismatch.status_code == 200, timestamp_mismatch.text
+    assert timestamp_mismatch.json()["current_visit_readiness"] == {
+        "ready_for_future_customer_access": False,
+        "customer_access_enabled": False,
+        "reasons": ["template_provenance_unverified"],
+    }
+    with SessionLocal() as db:
+        persisted_template = db.get(ChecklistTemplate, template_id)
+        assert persisted_template is not None
+        persisted_template.approved_at = original_approved_at
+        persisted_template.lifecycle_status = TemplateLifecycleStatus.retired
+        persisted_template.active_for_new_visits = False
+        persisted_template.retired_at = datetime.utcnow()
+        persisted_template.retired_by_user_id = advisor_id
+        db.commit()
+    retired_but_matching = client.get(f"/sessions/{session_id}/advisor-review")
+    assert retired_but_matching.status_code == 200, retired_but_matching.text
+    assert retired_but_matching.json()["current_visit_readiness"] == {
+        "ready_for_future_customer_access": True,
+        "customer_access_enabled": False,
+        "reasons": [],
+    }
     assert client.put(f"/sessions/{session_id}/advisor-review/items/brk_002", json={"disposition": "monitor", "rationale": "Attempted post-review rewrite."}).status_code == 409
 
     as_actor(tech_id, shop_id, UserRole.technician, "Technician")
     assert client.put(f"/sessions/{session_id}/inspection-items/brk_002", json={"condition": "good"}).status_code == 409
 
 app.dependency_overrides.clear()
-print("PASS: advisor review is submission-gated, role/shop scoped, requires complete human triage, and locks without customer-facing effects")
+print("PASS: advisor review is submission-gated, role/shop scoped, requires complete human triage, preserves full template provenance, and locks without customer-facing effects")

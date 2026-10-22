@@ -131,6 +131,8 @@ def _current_visit_readiness(inspection: InspectionSession, db: Session) -> dict
         or template.lifecycle_status not in {TemplateLifecycleStatus.approved, TemplateLifecycleStatus.retired}
         or template.source_reference != inspection.template_source_reference
         or template.source_sha256 != inspection.template_source_sha256
+        or template.approved_at != inspection.template_approved_at
+        or template.approved_by_user_id != inspection.template_approved_by_user_id
     ):
         reasons.append("template_provenance_unverified")
 
