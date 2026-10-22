@@ -25,7 +25,7 @@ The UI therefore uses confirmed manual vehicle entry. Plate/VIN scanning will be
 
 ## Phase 1.1: technician inspection workspace
 
-The next build slice snapshots the selected available template and version when an advisor starts a visit, then gives only the assigned technician a controlled, template-driven workspace. An item response may be `good`, `fair`, `poor`, or `na`; attention and N/A require a written reason. The server validates that every item belongs to the visit snapshot, stores one current response per item, and permits a technician to submit only when all snapshot items have an explicit result. Submission means **submitted for advisor review**, not customer delivery, approval, pricing, repair authorization, quality control, or a completed repair.
+The next build slice snapshots the selected available template and version when an advisor starts a visit, then gives only the assigned technician a controlled, template-driven workspace. An item response may be `good`, `poor` (**Needs attention** in the UI), or `na`; Needs attention and N/A require a written reason. Templates must have nonempty, globally unique section and item identities, and any selected observation must be one declared in that visit’s own snapshot. The server stores one current response per item and permits a technician to submit only when all snapshot items have an explicit result. Submission means **submitted for advisor review**, not customer delivery, approval, pricing, repair authorization, quality control, or a completed repair.
 
 The bundled Basic Vehicle Inspection Checklist is a named provisional test template. It is not represented as, or substituted for, the controlled inspection sheet. No final field locations, torque values, thresholds, evidence policy, AI diagnosis, plate scan, or customer-facing DVI release will be inferred or enabled by this slice.
 
@@ -35,12 +35,14 @@ The bundled Basic Vehicle Inspection Checklist is a named provisional test templ
 - `backend/app/api/checkin.py`: advisor/admin-only check-in bootstrap and pending-session creation.
 - `backend/app/api/sessions.py`: shop- and role-scoped inspection lifecycle APIs.
 - `backend/app/api/checklists.py`: staff read/admin write access protection.
+- `backend/app/inspection_template.py`: strict, reusable template document validation for administration, visit snapshotting, and coverage.
 - `dashboard/lib/`: Auth0 client and server-only internal API client.
 - `dashboard/app/check-in/`: server-gated Check-in page and client form.
+- `dashboard/app/inspections/`: technician-scoped provisional template workspace and full-coverage advisor-review handoff.
 - `dashboard/app/api/check-in/`: same-origin dashboard command route.
 - `dashboard/proxy.ts`: Auth0 SDK route and rolling-session middleware.
 - `dashboard/Dockerfile` and Compose changes: future supervised dashboard runtime.
 
 ## Delivery gates
 
-The isolated candidate must pass Python compilation, Next lint/build, and focused source checks before it is committed. No deployment occurs during this build phase. The test host still requires a separate service/process, explicit vhost, valid certificate, Auth0 web callback/logout/origin registration, secrets in the runtime store, real user/shop/technician/checklist seed data, and a Cloudflare DNS record before an after-hours test release can be considered.
+The isolated candidate has passed Python compilation, Next lint/build, container builds, a disposable PostgreSQL migration, and an API acceptance exercise. No deployment occurs during this build phase. Auth0 and DNS are now provisioned for the requested test host. The after-hours release still requires an explicit final go/no-go, a guarded release from this isolated commit, a pre-migration backup/check, a post-release health check, a real Auth0 sign-in/callback verification, and real pilot user/shop/technician/checklist seed-data verification.
