@@ -29,6 +29,12 @@ The next build slice snapshots the selected available template and version when 
 
 The bundled Basic Vehicle Inspection Checklist is a named provisional test template. It is not represented as, or substituted for, the controlled inspection sheet. No final field locations, torque values, thresholds, evidence policy, AI diagnosis, plate scan, or customer-facing DVI release will be inferred or enabled by this slice.
 
+## Phase 1.2: Advisor Review Workbench
+
+The next allowed slice is a single-visit, advisor/admin-only workbench for a technician-submitted provisional inspection. It shows the customer’s original concern first, then only human-attested Needs attention responses for an explicit, written human disposition: **Safety**, **Maintenance**, **Visit concern**, **Monitor**, **No action**, or **Needs clarification**. Good and N/A work remain compact counts rather than an upsell list. The workbench records a distinct `advisor_reviewed` state only when every Needs attention response has a saved advisor decision.
+
+This state is an internal review record—not a diagnosis, estimate, customer DVI/Glovebox release, message, repair authorization, appointment, or AI recommendation. Technician observations remain separate from advisor dispositions. The next customer-facing release, pricing, evidence, torque, AI, plate scan, and controlled inspection-sheet work remain separate gates.
+
 ## Project structure
 
 - `backend/app/auth.py`: Auth0 JWT verification and database-derived actor/scope dependency.

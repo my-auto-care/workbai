@@ -5,13 +5,15 @@ import { useMemo, useState } from "react";
 
 import styles from "./inspection.module.css";
 
-type Condition = "good" | "fair" | "poor" | "na";
+type Condition = "good" | "poor" | "na";
+type StoredCondition = Condition | "fair";
 
 type TemplateItem = {
   id: string;
   name: string;
   type?: "condition" | "measurement";
   unit?: string;
+  allow_na?: boolean;
   options?: string[];
 };
 
@@ -20,7 +22,7 @@ type TemplateSection = { id: string; name: string; items: TemplateItem[] };
 type ItemResponse = {
   id: string;
   template_item_id: string;
-  condition: Condition;
+  condition: StoredCondition;
   note?: string | null;
   measurement?: string | null;
   selected_option?: string | null;
@@ -29,7 +31,7 @@ type ItemResponse = {
 
 type Session = {
   id: string;
-  status: "pending" | "in_progress" | "submitted" | "completed" | "abandoned";
+  status: "pending" | "in_progress" | "submitted" | "advisor_reviewed" | "completed" | "abandoned";
   vehicle_year?: string | null;
   vehicle_make?: string | null;
   vehicle_model?: string | null;
@@ -47,6 +49,7 @@ export type InspectionWorkspaceData = {
   summary: { item_count: number; response_count: number };
   can_record: boolean;
   can_submit: boolean;
+  can_review: boolean;
 };
 
 type CommandResult = ItemResponse | { session: Session; message: string } | Session;
@@ -55,7 +58,7 @@ function vehicleLabel(session: Session) {
   return [session.vehicle_year, session.vehicle_make, session.vehicle_model].filter(Boolean).join(" ") || "Vehicle details pending";
 }
 
-function conditionLabel(condition: Condition) {
+function conditionLabel(condition: StoredCondition) {
   return condition === "good" ? "Good" : condition === "na" ? "N/A" : "Needs attention";
 }
 
@@ -71,15 +74,20 @@ async function command(sessionId: string, body: Record<string, unknown>): Promis
 }
 
 function ItemCard({ item, saved, writable, onSave }: { item: TemplateItem; saved?: ItemResponse; writable: boolean; onSave: (payload: { condition: Condition; note: string; measurement: string; selected_option: string }) => Promise<void> }) {
-  const [condition, setCondition] = useState<Condition>(saved?.condition ?? "good");
+  const [condition, setCondition] = useState<Condition | "">(saved?.condition === "fair" ? "poor" : saved?.condition ?? "");
   const [note, setNote] = useState(saved?.note ?? "");
   const [measurement, setMeasurement] = useState(saved?.measurement ?? "");
   const [selectedOption, setSelectedOption] = useState(saved?.selected_option ?? "");
   const [state, setState] = useState<"idle" | "saving" | "error">("idle");
   const [message, setMessage] = useState("");
-  const needsNote = condition !== "good";
+  const needsNote = condition === "poor" || condition === "na";
 
   async function save() {
+    if (!condition) {
+      setState("error");
+      setMessage("Select Good, Needs attention, or an authorized N/A result before saving.");
+      return;
+    }
     if (needsNote && !note.trim()) {
       setState("error");
       setMessage("Add a written note before saving Needs attention or N/A.");
@@ -108,7 +116,7 @@ function ItemCard({ item, saved, writable, onSave }: { item: TemplateItem; saved
             <legend>Result</legend>
             <label className={condition === "good" ? styles.choiceGoodActive : styles.choice}><input type="radio" name={`${item.id}-condition`} checked={condition === "good"} onChange={() => setCondition("good")} /><span>Good</span></label>
             <label className={condition === "poor" ? styles.choiceAttentionActive : styles.choice}><input type="radio" name={`${item.id}-condition`} checked={condition === "poor"} onChange={() => setCondition("poor")} /><span>Needs attention</span></label>
-            <label className={condition === "na" ? styles.choiceNaActive : styles.choice}><input type="radio" name={`${item.id}-condition`} checked={condition === "na"} onChange={() => setCondition("na")} /><span>N/A</span></label>
+            {item.allow_na && <label className={condition === "na" ? styles.choiceNaActive : styles.choice}><input type="radio" name={`${item.id}-condition`} checked={condition === "na"} onChange={() => setCondition("na")} /><span>N/A</span></label>}
           </fieldset>
           <div className={styles.itemFields}>
             {item.type === "measurement" && <label>Measurement{item.unit ? <span> · {item.unit}</span> : null}<input value={measurement} onChange={(event) => setMeasurement(event.target.value)} inputMode="decimal" placeholder={item.unit ? `Enter ${item.unit}` : "Enter value"} /></label>}
@@ -197,6 +205,8 @@ export function InspectionWorkspace({ initialWorkspace }: { initialWorkspace: In
 
       {notice && <p className={submissionState === "error" ? styles.noticeError : styles.notice} role={submissionState === "error" ? "alert" : "status"}>{notice}</p>}
 
+      {workspace.can_review && <section className={styles.startPanel}><div><p className={styles.eyebrow}>Advisor handoff</p><h2>Inspection is ready for internal review</h2><p>Review technician-attested attention items before any customer-facing preparation. No report, estimate, message, or authorization is created here.</p></div><Link className={styles.primaryAction} href={`/advisor-review/${workspace.session.id}`}>Open advisor workbench</Link></section>}
+
       {workspace.session.status !== "pending" && activeSection && <>
         <nav className={styles.sectionNav} aria-label="Inspection sections">
           {workspace.template.sections.map((section) => {
@@ -205,7 +215,7 @@ export function InspectionWorkspace({ initialWorkspace }: { initialWorkspace: In
           })}
         </nav>
         <section className={styles.workspace} aria-labelledby="section-title">
-          <header className={styles.workspaceHead}><p className={styles.eyebrow}>Section {workspace.template.sections.findIndex((section) => section.id === activeSection.id) + 1}</p><h2 id="section-title">{activeSection.name}</h2><p>Record a result for each item. Needs attention and N/A require a written note. An unfilled item is never treated as Good.</p></header>
+          <header className={styles.workspaceHead}><p className={styles.eyebrow}>Section {workspace.template.sections.findIndex((section) => section.id === activeSection.id) + 1}</p><h2 id="section-title">{activeSection.name}</h2><p>Record a result for each item. Needs attention and template-authorized N/A require a written note. An unfilled item is never treated as Good.</p></header>
           <div className={styles.itemList}>
             {activeSection.items.map((item) => <ItemCard key={item.id} item={item} saved={responseMap.get(item.id)} writable={workspace.can_record && active} onSave={(payload) => saveItem(item.id, payload)} />)}
           </div>

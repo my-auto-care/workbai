@@ -16,3 +16,11 @@
 - [x] Permit a technician to submit only a fully rated inspection for advisor review. Do not send customer messages, release a Digital Glovebox view, create an estimate, or turn submission into authorization.
 - [x] Enforce the no-bypass integrity contract: public session creation is unavailable; template section and item identities are structurally validated and globally unique; selected observations must belong to the saved snapshot; the command surface accepts only Good, Needs attention, and N/A.
 - [x] Validate database migration, backend syntax, dashboard lint/build, final container images, and isolated API acceptance scenarios; commit without deploying.
+
+## Phase 1.2 — Advisor Review Workbench
+
+- [x] Add an advisor/admin-only review state that follows technician submission, with no customer release, repair authorization, estimate, or automatic communication side effect.
+- [x] Give an advisor a single-visit workbench ordered by original concern, then explicit human triage of technician-attested Needs attention items: Safety, Maintenance, Visit concern, Monitor, No action, or Needs clarification.
+- [x] Require a written advisor rationale for every attention-item disposition; show Good and N/A work as a contained count rather than a sales list.
+- [x] Keep technician observations and advisor dispositions separate, attribute the advisor reviewer, prevent cross-shop review, and block review completion until every Needs attention item has a saved human decision; serialize competing save/complete commands on the canonical visit row.
+- [x] Validate the migration, role/scope/state boundaries, lint/build, images, and isolated API acceptance scenarios—including simultaneous completion attempts—and commit without deploying.

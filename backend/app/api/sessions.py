@@ -82,6 +82,7 @@ def _session_dict(inspection: InspectionSession):
         "template_version": inspection.template_version,
         "started_at": inspection.started_at,
         "inspection_submitted_at": inspection.inspection_submitted_at,
+        "advisor_reviewed_at": inspection.advisor_reviewed_at,
         "completed_at": inspection.completed_at,
     }
 
@@ -233,6 +234,7 @@ def inspection_workspace(
         "summary": {"item_count": len(specs), "response_count": len(inspection.item_responses)},
         "can_record": actor.role == UserRole.technician,
         "can_submit": actor.role == UserRole.technician and inspection.status == SessionStatus.in_progress,
+        "can_review": actor.role in {UserRole.advisor, UserRole.admin} and inspection.status == SessionStatus.submitted,
     }
 
 
@@ -268,6 +270,8 @@ def record_inspection_item(
     allowed_options = item.get("options")
     if body.selected_option and (not isinstance(allowed_options, list) or body.selected_option not in allowed_options):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Selected observation is not allowed for this template item")
+    if body.condition == "na" and item.get("allow_na") is not True:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="N/A is not authorized for this template item")
 
     response = db.query(InspectionItemResponse).filter(
         InspectionItemResponse.session_id == inspection.id,

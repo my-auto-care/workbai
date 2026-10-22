@@ -21,6 +21,7 @@ class TemplateItem(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     type: Literal["condition", "measurement"] = "condition"
     unit: str | None = Field(default=None, max_length=64)
+    allow_na: bool = False
     options: list[str] | None = Field(default=None, max_length=32)
 
     @field_validator("options")

@@ -31,6 +31,7 @@ class SessionStatus(str, enum.Enum):
     pending = "pending"
     in_progress = "in_progress"
     submitted = "submitted"
+    advisor_reviewed = "advisor_reviewed"
     completed = "completed"
     abandoned = "abandoned"
 
@@ -40,6 +41,15 @@ class FindingCondition(str, enum.Enum):
     fair = "fair"
     poor = "poor"
     na = "na"
+
+
+class AdvisorDisposition(str, enum.Enum):
+    safety = "safety"
+    maintenance = "maintenance"
+    visit_concern = "visit_concern"
+    monitor = "monitor"
+    no_action = "no_action"
+    needs_clarification = "needs_clarification"
 
 
 class MediaType(str, enum.Enum):
@@ -135,6 +145,8 @@ class InspectionSession(Base):
     template_snapshot = Column(JSONB, nullable=True)
     template_version = Column(Integer, nullable=True)
     inspection_submitted_at = Column(DateTime, nullable=True)
+    advisor_reviewed_at = Column(DateTime, nullable=True)
+    advisor_reviewed_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     # Dispatch: technician assigned by shop manager
     assigned_technician_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     status = Column(SAEnum(SessionStatus), default=SessionStatus.in_progress)
@@ -146,11 +158,13 @@ class InspectionSession(Base):
     shop = relationship("Shop", back_populates="sessions")
     technician = relationship("User", back_populates="sessions", foreign_keys=[technician_id])
     assigned_technician = relationship("User", foreign_keys=[assigned_technician_id])
+    advisor_reviewer = relationship("User", foreign_keys=[advisor_reviewed_by_user_id])
     vehicle = relationship("Vehicle", back_populates="sessions")
     checklist_template = relationship("ChecklistTemplate", back_populates="sessions")
     findings = relationship("Finding", back_populates="session")
     media = relationship("Media", back_populates="session")
     item_responses = relationship("InspectionItemResponse", back_populates="session")
+    advisor_review_items = relationship("AdvisorReviewItem", back_populates="session")
 
 
 class Finding(Base):
@@ -187,6 +201,27 @@ class InspectionItemResponse(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     session = relationship("InspectionSession", back_populates="item_responses")
+
+
+class AdvisorReviewItem(Base):
+    """Human advisor disposition; never a rewrite of technician evidence or customer action."""
+
+    __tablename__ = "advisor_review_items"
+    __table_args__ = (
+        UniqueConstraint("session_id", "template_item_id", name="uq_advisor_review_item"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("inspection_sessions.id"), nullable=False)
+    template_item_id = Column(Text, nullable=False)
+    disposition = Column(SAEnum(AdvisorDisposition), nullable=False)
+    rationale = Column(Text, nullable=False)
+    reviewed_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    session = relationship("InspectionSession", back_populates="advisor_review_items")
+    reviewer = relationship("User", foreign_keys=[reviewed_by_user_id])
 
 
 class Media(Base):
