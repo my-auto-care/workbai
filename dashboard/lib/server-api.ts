@@ -57,3 +57,20 @@ export async function backendFetch(path: string, init: RequestInit = {}): Promis
 export async function backendJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await backendFetch(path, init)).json() as Promise<T>;
 }
+
+export async function publicCurrentVisitJson<T>(secret: string, clientIp: string | null): Promise<T> {
+  const response = await fetch(urlFor("/public/current-visit/resolve"), {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Workbai-Public-Client-IP": clientIp ?? "",
+      "X-Workbai-Public-Edge-Verified": "1",
+      "X-Workbai-Public-Resolver-Key": required("WORKBAI_PUBLIC_RESOLVER_SHARED_SECRET"),
+    },
+    body: JSON.stringify({ secret }),
+  });
+  if (!response.ok) throw new BackendRequestError(response.status, "Visit link is unavailable");
+  return response.json() as Promise<T>;
+}

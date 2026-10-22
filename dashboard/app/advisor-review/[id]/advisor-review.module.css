@@ -1,5 +1,5 @@
 .shell { min-height: 100vh; background: #f1ece3; color: #1f3a47; padding: clamp(24px, 4vw, 56px); }
-.topbar, .context, .boundary, .currentVisit, .quietResults, .itemList, .completePanel, .empty, .notice, .error { margin-left: auto; margin-right: auto; max-width: 1120px; }
+.topbar, .context, .boundary, .currentVisit, .readinessReasons, .quietResults, .itemList, .completePanel, .empty, .notice, .error { margin-left: auto; margin-right: auto; max-width: 1120px; }
 .topbar { align-items: flex-end; border-bottom: 1px solid #cad7da; display: flex; gap: 24px; justify-content: space-between; padding-bottom: 26px; }
 .eyebrow, .recordLabel, .itemMeta { color: #617a83; font-size: .7rem; font-weight: 800; letter-spacing: .1em; margin: 0; text-transform: uppercase; }
 .topbar h1 { font-size: clamp(2rem, 5vw, 3.2rem); letter-spacing: -.045em; line-height: 1; margin: 7px 0 0; }
@@ -17,6 +17,20 @@
 .currentVisit h2 { font-size: 1.08rem; letter-spacing: -.018em; margin: 6px 0 0; }
 .currentVisit p:not(.eyebrow) { color: #58717a; font-size: .9rem; line-height: 1.55; margin: 8px 0 0; }
 .currentVisit ul { color: #76534a; font-size: .85rem; line-height: 1.5; margin: 0; padding-left: 18px; }
+.readinessReasons { background: #fdf5e6; border-left: 3px solid #e29337; color: #76534a; font-size: .85rem; line-height: 1.5; margin-bottom: 16px; padding: 12px 16px; }
+.readinessReasons ul { margin: 0; padding-left: 18px; }
+.currentVisitActions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.controlHint, .deliveryHold { color: #60777d; font-size: .84rem; line-height: 1.5; margin: 0; }
+.deliveryHold { border-top: 1px solid #d9e2e0; padding-top: 13px; }
+.deliveryHold strong { color: #385a63; }
+.progressControls { align-items: end; display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 10px; }
+.progressControls label { color: #345560; display: grid; font-size: .78rem; font-weight: 800; gap: 6px; min-width: min(100%, 260px); }
+.progressControls select { appearance: none; background: #fff; border: 1px solid #a7bbc0; border-radius: 9px; color: #1f3a47; font: inherit; font-size: .9rem; min-height: 42px; padding: 9px 12px; }
+.revokeButton { background: transparent; border: 1px solid #c87d75; border-radius: 9px; color: #9a3d36; cursor: pointer; font: inherit; font-size: .84rem; font-weight: 800; min-height: 42px; padding: 9px 13px; }
+.revokeButton:hover:not(:disabled) { background: #fdf0ed; }
+.counterLink { background: #eaf6f4; border: 1px solid #b7dcd6; border-radius: 10px; color: #356067; display: grid; font-size: .84rem; gap: 6px; line-height: 1.45; padding: 14px; }
+.counterLink strong { color: #1f5d63; }
+.counterLink a { color: #087e91; font-weight: 800; width: fit-content; }
 .quietResults, .reviewItem, .empty, .completePanel { background: #fbf8f2; border: 1px solid #d4dedf; border-radius: 16px; box-shadow: 0 14px 36px rgb(26 56 68 / 6%); }
 .quietResults { margin-bottom: 16px; padding: 24px 26px; }
 .quietResults h2, .completePanel h2, .empty h2 { font-size: 1.25rem; letter-spacing: -.022em; margin: 6px 0 0; }
@@ -51,4 +65,4 @@
 .error { background: #fbe4e3; color: #87352f; }
 .notice, .error { margin-top: 18px; }
 .saved, .error { margin: 0; }
-@media (max-width: 700px) { .shell { padding: 22px 16px; } .topbar, .completePanel { align-items: flex-start; flex-direction: column; } .context { grid-template-columns: repeat(2, minmax(0, 1fr)); } .completeButton { width: 100%; } .boundary { align-items: flex-start; flex-direction: column; gap: 4px; } }
+@media (max-width: 700px) { .shell { padding: 22px 16px; } .topbar, .completePanel { align-items: flex-start; flex-direction: column; } .context { grid-template-columns: repeat(2, minmax(0, 1fr)); } .completeButton { width: 100%; } .boundary { align-items: flex-start; flex-direction: column; gap: 4px; } .currentVisitActions, .progressControls { align-items: stretch; flex-direction: column; width: 100%; } .progressControls label { min-width: 0; } .saveButton, .revokeButton { width: 100%; } }

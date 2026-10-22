@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { BackendRequestError, backendJson } from "@/lib/server-api";
 
-import { AdvisorReviewWorkbench, type AdvisorReviewData } from "./AdvisorReviewWorkbench";
+import { AdvisorReviewWorkbench, type AdvisorReviewData, type CurrentVisitReleaseData } from "./AdvisorReviewWorkbench";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +12,14 @@ type PageProps = { params: Promise<{ id: string }> };
 export default async function AdvisorReviewPage({ params }: PageProps) {
   const { id } = await params;
   let review: AdvisorReviewData | null = null;
+  let currentVisit: CurrentVisitReleaseData | null = null;
   let message = "This advisor review is unavailable.";
 
   try {
-    review = await backendJson<AdvisorReviewData>(`/sessions/${id}/advisor-review`);
+    [review, currentVisit] = await Promise.all([
+      backendJson<AdvisorReviewData>(`/sessions/${id}/advisor-review`),
+      backendJson<CurrentVisitReleaseData>(`/sessions/${id}/current-visit`),
+    ]);
   } catch (error) {
     if (error instanceof BackendRequestError && error.status === 401) {
       redirect(`/auth/login?returnTo=${encodeURIComponent(`/advisor-review/${id}`)}`);
@@ -24,7 +28,7 @@ export default async function AdvisorReviewPage({ params }: PageProps) {
     message = error instanceof BackendRequestError ? error.detail : message;
   }
 
-  if (review) return <AdvisorReviewWorkbench initialReview={review} />;
+  if (review && currentVisit) return <AdvisorReviewWorkbench initialReview={review} initialCurrentVisit={currentVisit} />;
 
   return (
     <main className="workbai-home">

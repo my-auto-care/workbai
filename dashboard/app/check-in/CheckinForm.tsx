@@ -9,6 +9,7 @@ export type CheckinOptions = {
   actor: { name: string; role: "advisor" | "admin"; shop_id: string };
   technicians: Array<{ id: string; name: string }>;
   checklists: Array<{ id: string; name: string; version: number; vehicle_filter: Record<string, unknown> }>;
+  customer_contact_capture_enabled: boolean;
 };
 
 type FormState = {
@@ -20,9 +21,13 @@ type FormState = {
   customer_concern: string;
   presence_mode: string;
   assigned_technician_id: string;
+  customer_contact_channel: "sms" | "email";
+  customer_contact_destination: string;
+  current_visit_link_consent: "granted" | "declined" | "not_asked";
+  current_visit_progress_consent: "granted" | "declined" | "not_asked";
 };
 
-type Result = { id: string; status: string; vehicle_year: string; vehicle_make: string; vehicle_model: string };
+type Result = { id: string; status: string; vehicle_year: string; vehicle_make: string; vehicle_model: string; customer_contact_recorded?: boolean };
 
 export function CheckinForm({ options, userName }: { options: CheckinOptions; userName: string }) {
   const [form, setForm] = useState<FormState>({
@@ -34,6 +39,10 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
     customer_concern: "",
     presence_mode: "",
     assigned_technician_id: options.technicians[0]?.id ?? "",
+    customer_contact_channel: "sms",
+    customer_contact_destination: "",
+    current_visit_link_consent: "not_asked",
+    current_visit_progress_consent: "not_asked",
   });
   const [state, setState] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -56,11 +65,18 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
     setState("saving");
     setMessage("");
 
+    const { customer_contact_channel, customer_contact_destination, current_visit_link_consent, current_visit_progress_consent, ...visit } = form;
     const payload = {
-      ...form,
+      ...visit,
       vehicle_year: Number(form.vehicle_year),
       vehicle_mileage: form.vehicle_mileage ? Number(form.vehicle_mileage) : null,
       vehicle_vin: form.vehicle_vin || null,
+      customer_contact: customer_contact_destination.trim() ? {
+        channel: customer_contact_channel,
+        destination: customer_contact_destination.trim(),
+        current_visit_link_consent,
+        current_visit_progress_consent,
+      } : null,
     };
 
     try {
@@ -87,10 +103,10 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
           <div className={styles.receiptMark} aria-hidden="true">✓</div>
           <p className={styles.eyebrow}>Inspection handoff recorded</p>
           <h1 id="started-title">{vehicle}</h1>
-          <p className={styles.receiptCopy}>The inspection is pending in the assigned technician’s queue. No customer message, portal link, or DVI report was sent.</p>
+          <p className={styles.receiptCopy}>{result.customer_contact_recorded ? "The optional contact and visit-only permissions were recorded. No customer message or portal link was sent; a manager must separately approve any customer access." : "The inspection is pending in the assigned technician’s queue. No customer message, portal link, or DVI report was sent."}</p>
           <div className={styles.receiptActions}>
             <Link className={styles.primaryAction} href="/queue">Open inspection queue</Link>
-            <button className={styles.secondaryAction} onClick={() => { setResult(null); setState("idle"); setForm((current) => ({ ...current, vehicle_vin: "", vehicle_mileage: "", customer_concern: "" })); }}>Start another check-in</button>
+            <button className={styles.secondaryAction} onClick={() => { setResult(null); setState("idle"); setForm((current) => ({ ...current, vehicle_vin: "", vehicle_mileage: "", customer_concern: "", customer_contact_destination: "", current_visit_link_consent: "not_asked", current_visit_progress_consent: "not_asked" })); }}>Start another check-in</button>
           </div>
         </section>
       </main>
@@ -135,7 +151,7 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
             <label>VIN <span className={styles.optional}>optional</span><input className={styles.mono} maxLength={17} value={form.vehicle_vin} onChange={(event) => update("vehicle_vin", event.target.value.toUpperCase())} placeholder="17-character VIN" /></label>
             <label>Mileage <span className={styles.optional}>optional</span><input inputMode="numeric" min="0" max="2000000" value={form.vehicle_mileage} onChange={(event) => update("vehicle_mileage", event.target.value)} placeholder="48,000" /></label>
           </div>
-          <p className={styles.note}>Plate and VIN image scanning will be added as a separate consent-led flow. This release uses confirmed manual entry and does not retain customer contact information.</p>
+          <p className={styles.note}>Plate and VIN image scanning will be added as a separate consent-led flow. This release uses confirmed manual entry.</p>
         </section>
 
         <section className={styles.section}>
@@ -156,9 +172,27 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
           </fieldset>
         </section>
 
-        <section className={styles.section}>
+        {options.customer_contact_capture_enabled && <section className={styles.section}>
           <div className={styles.sectionHead}>
             <span className={styles.step}>03</span>
+            <div><h2>Customer contact & permissions <span className={styles.optional}>optional</span></h2><p>You can start this visit without contact details. This information is only for this visit.</p></div>
+          </div>
+          <div className={styles.gridTwo}>
+            <label>Contact method<select value={form.customer_contact_channel} onChange={(event) => update("customer_contact_channel", event.target.value)}><option value="sms">Mobile number</option><option value="email">Email address</option></select></label>
+            <label>{form.customer_contact_channel === "sms" ? "Mobile number" : "Email address"}<input value={form.customer_contact_destination} onChange={(event) => update("customer_contact_destination", event.target.value)} placeholder={form.customer_contact_channel === "sms" ? "+15551234567" : "customer@example.com"} /></label>
+          </div>
+          <fieldset className={styles.consentChoices}>
+            <legend>May we use this contact for this visit?</legend>
+            <p>This is only for this visit. It does not create an account, authorize repairs, or permit promotional messages. The customer may say no and still receive service.</p>
+            <label>Private visit link<select value={form.current_visit_link_consent} onChange={(event) => update("current_visit_link_consent", event.target.value)}><option value="not_asked">Not discussed</option><option value="granted">Yes — customer agreed</option><option value="declined">No — customer declined</option></select></label>
+            <label>Visit progress updates<select value={form.current_visit_progress_consent} onChange={(event) => update("current_visit_progress_consent", event.target.value)}><option value="not_asked">Not discussed</option><option value="granted">Yes — customer agreed</option><option value="declined">No — customer declined</option></select></label>
+          </fieldset>
+          <p className={styles.note}>No message is sent at Check-in. Customer access and any future delivery remain manager-controlled and require their own release checks.</p>
+        </section>}
+
+        <section className={styles.section}>
+          <div className={styles.sectionHead}>
+            <span className={styles.step}>{options.customer_contact_capture_enabled ? "04" : "03"}</span>
             <div><h2>Reason for visit</h2><p>Capture the customer’s words. Do not diagnose or promise work here.</p></div>
           </div>
           <label className={styles.fullLabel}>Customer-stated concern<textarea required minLength={3} maxLength={1000} value={form.customer_concern} onChange={(event) => update("customer_concern", event.target.value)} placeholder="Example: Steering wheel shakes while braking on the highway." rows={4} /></label>
@@ -166,7 +200,7 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
 
         <section className={styles.section}>
           <div className={styles.sectionHead}>
-            <span className={styles.step}>04</span>
+            <span className={styles.step}>{options.customer_contact_capture_enabled ? "05" : "04"}</span>
             <div><h2>Inspection handoff</h2><p>The active controlled template is selected by governance; choose the technician who will own the inspection.</p></div>
           </div>
           <div className={styles.gridTwo}>

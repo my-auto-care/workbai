@@ -188,6 +188,8 @@ class InspectionSession(Base):
     media = relationship("Media", back_populates="session")
     item_responses = relationship("InspectionItemResponse", back_populates="session")
     advisor_review_items = relationship("AdvisorReviewItem", back_populates="session")
+    customer_contacts = relationship("CustomerContactPoint", back_populates="session")
+    current_visit_release = relationship("CurrentVisitRelease", back_populates="session", uselist=False)
 
 
 class Finding(Base):
@@ -245,6 +247,178 @@ class AdvisorReviewItem(Base):
 
     session = relationship("InspectionSession", back_populates="advisor_review_items")
     reviewer = relationship("User", foreign_keys=[reviewed_by_user_id])
+
+
+class CustomerContactPoint(Base):
+    """Per-visit encrypted contact channel; never customer identity or authority."""
+
+    __tablename__ = "customer_contact_points"
+    __table_args__ = (UniqueConstraint("session_id", "channel", name="uq_customer_contact_points_session_channel"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("inspection_sessions.id"), nullable=False)
+    channel = Column(String(16), nullable=False)
+    encrypted_destination = Column(Text, nullable=False)
+    encryption_key_id = Column(String(128), nullable=False)
+    lookup_hmac = Column(String(64), nullable=False)
+    verification_state = Column(String(32), nullable=False, default="unverified")
+    verification_method = Column(String(64), nullable=True)
+    verified_at = Column(DateTime, nullable=True)
+    verified_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    session = relationship("InspectionSession", back_populates="customer_contacts")
+
+
+class CommunicationConsent(Base):
+    """Purpose-specific consent. Verification and contact possession are not consent."""
+
+    __tablename__ = "communication_consents"
+    __table_args__ = (UniqueConstraint("contact_point_id", "purpose", name="uq_communication_consents_contact_purpose"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    contact_point_id = Column(UUID(as_uuid=True), ForeignKey("customer_contact_points.id"), nullable=False)
+    purpose = Column(String(48), nullable=False)
+    state = Column(String(32), nullable=False)
+    policy_version = Column(String(64), nullable=False)
+    captured_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    captured_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    revoked_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+
+
+class CustomerReleaseManagerGrant(Base):
+    """Explicit per-shop delegation; admin/advisor role alone never permits release."""
+
+    __tablename__ = "customer_release_manager_grants"
+    __table_args__ = (UniqueConstraint("shop_id", "user_id", name="uq_customer_release_manager_grant"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    granted_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    granted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    revoked_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+
+
+class CurrentVisitRelease(Base):
+    """Server-owned state for a scoped customer projection, separate from inspection state."""
+
+    __tablename__ = "current_visit_releases"
+    __table_args__ = (UniqueConstraint("inspection_session_id", name="uq_current_visit_release_session"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    inspection_session_id = Column(UUID(as_uuid=True), ForeignKey("inspection_sessions.id"), nullable=False)
+    state = Column(String(32), nullable=False, default="draft")
+    human_owner_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    source_template_sha256 = Column(String(64), nullable=False)
+    source_advisor_reviewed_at = Column(DateTime, nullable=False)
+    source_advisor_reviewed_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    active_projection_revision = Column(Integer, nullable=True)
+    prepared_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    prepared_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    approved_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    revoked_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+    revocation_reason = Column(String(64), nullable=True)
+
+    session = relationship("InspectionSession", back_populates="current_visit_release")
+    projections = relationship("CurrentVisitProjectionRevision", back_populates="release")
+    links = relationship("CustomerPublicLink", back_populates="release")
+
+
+class CurrentVisitProjectionRevision(Base):
+    """Immutable allowlisted customer-safe content revision, never an internal report dump."""
+
+    __tablename__ = "current_visit_projection_revisions"
+    __table_args__ = (UniqueConstraint("release_id", "revision", name="uq_current_visit_projection_revision"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    release_id = Column(UUID(as_uuid=True), ForeignKey("current_visit_releases.id"), nullable=False)
+    revision = Column(Integer, nullable=False)
+    state = Column(String(32), nullable=False, default="draft")
+    status_code = Column(String(64), nullable=False)
+    schema_version = Column(Integer, nullable=False, default=1)
+    payload_json = Column(JSONB, nullable=False)
+    payload_sha256 = Column(String(64), nullable=False)
+    prepared_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    prepared_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    approved_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+
+    release = relationship("CurrentVisitRelease", back_populates="projections")
+
+
+class CustomerPublicLink(Base):
+    """Opaque bearer view link. Its plaintext secret is never persisted."""
+
+    __tablename__ = "customer_public_links"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    release_id = Column(UUID(as_uuid=True), ForeignKey("current_visit_releases.id"), nullable=False)
+    purpose = Column(String(16), nullable=False)
+    secret_hmac = Column(String(64), nullable=False, unique=True)
+    hmac_key_id = Column(String(128), nullable=False)
+    state = Column(String(32), nullable=False, default="active")
+    issued_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    issued_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+    revocation_reason = Column(String(64), nullable=True)
+    last_accessed_at = Column(DateTime, nullable=True)
+
+    release = relationship("CurrentVisitRelease", back_populates="links")
+
+
+class CurrentVisitReleaseAudit(Base):
+    """Append-only factual release audit. Never store contacts, URLs, or plaintext link secrets."""
+
+    __tablename__ = "current_visit_release_audits"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    inspection_session_id = Column(UUID(as_uuid=True), ForeignKey("inspection_sessions.id"), nullable=False)
+    release_id = Column(UUID(as_uuid=True), ForeignKey("current_visit_releases.id"), nullable=True)
+    action = Column(String(64), nullable=False)
+    actor_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    reason_code = Column(String(64), nullable=True)
+    release_state = Column(String(32), nullable=True)
+    projection_sha256 = Column(String(64), nullable=True)
+    occurred_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class CustomerPublicAccessAudit(Base):
+    """Token-free, minimized public audit evidence with explicit retention."""
+
+    __tablename__ = "customer_public_access_audits"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    link_id = Column(UUID(as_uuid=True), ForeignKey("customer_public_links.id"), nullable=True)
+    outcome = Column(String(32), nullable=False)
+    client_ip_hmac = Column(String(64), nullable=False)
+    occurred_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+
+
+class CurrentVisitRateLimitBucket(Base):
+    """Short-lived atomic public rate counter; no raw IP, token, or user agent."""
+
+    __tablename__ = "current_visit_rate_limit_buckets"
+    __table_args__ = (UniqueConstraint("scope", "key_hmac", "window_started_at", name="uq_current_visit_rate_limit_bucket"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    scope = Column(String(16), nullable=False)
+    key_hmac = Column(String(64), nullable=False)
+    window_started_at = Column(DateTime, nullable=False)
+    request_count = Column(Integer, nullable=False, default=1)
+    expires_at = Column(DateTime, nullable=False)
 
 
 class Media(Base):

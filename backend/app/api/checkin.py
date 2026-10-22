@@ -12,13 +12,33 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.auth import StaffActor, require_roles
-from app.db.models import ChecklistTemplate, InspectionSession, SessionStatus, TemplateLifecycleStatus, User, UserRole
+from app.current_visit_security import (
+    contact_encryption_key_id,
+    contact_lookup_hmac,
+    current_visit_release_enabled,
+    encrypt_contact,
+    normalize_contact,
+    require_current_visit_release_enabled,
+)
+from app.db.models import ChecklistTemplate, CommunicationConsent, CustomerContactPoint, InspectionSession, SessionStatus, TemplateLifecycleStatus, User, UserRole
 from app.db.session import get_db
 from app.inspection_template import validated_template_snapshot
 
 router = APIRouter(prefix="/check-in", tags=["check-in"])
 _ADVISOR_OR_ADMIN = require_roles(UserRole.advisor, UserRole.admin)
 _VIN = re.compile(r"^[A-HJ-NPR-Z0-9]{17}$")
+_CONSENT_POLICY_VERSION = "current-visit-pilot-v1"
+
+
+class CustomerContactAtCheckin(BaseModel):
+    """Optional, visit-scoped contact and purpose-specific permission record."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    channel: Literal["sms", "email"]
+    destination: str = Field(min_length=3, max_length=320)
+    current_visit_link_consent: Literal["granted", "declined", "not_asked"] = "not_asked"
+    current_visit_progress_consent: Literal["granted", "declined", "not_asked"] = "not_asked"
 
 
 class CheckinCreate(BaseModel):
@@ -34,6 +54,7 @@ class CheckinCreate(BaseModel):
     customer_concern: str = Field(min_length=3, max_length=1000)
     presence_mode: Literal["waiter", "dropoff"]
     assigned_technician_id: uuid.UUID
+    customer_contact: CustomerContactAtCheckin | None = None
 
     @field_validator("vehicle_vin")
     @classmethod
@@ -59,6 +80,7 @@ def _session_payload(session: InspectionSession) -> dict:
         "vehicle_mileage": session.vehicle_mileage,
         "presence_mode": session.presence_mode,
         "template_version": session.template_version,
+        "customer_contact_recorded": bool(session.customer_contacts),
         "started_at": session.started_at,
     }
 
@@ -95,6 +117,7 @@ def checkin_options(
             {"id": str(template.id), "name": template.name, "version": template.version, "vehicle_filter": template.vehicle_filter or {}}
             for template in templates
         ],
+        "customer_contact_capture_enabled": current_visit_release_enabled(),
     }
 
 
@@ -165,6 +188,41 @@ def create_pending_session(
         started_at=datetime.utcnow(),
     )
     db.add(session)
+    if body.customer_contact:
+        require_current_visit_release_enabled()
+        normalized = normalize_contact(body.customer_contact.channel, body.customer_contact.destination)
+        db.flush()
+        contact = CustomerContactPoint(
+            shop_id=actor.shop_id,
+            session_id=session.id,
+            channel=body.customer_contact.channel,
+            encrypted_destination=encrypt_contact(normalized),
+            encryption_key_id=contact_encryption_key_id(),
+            lookup_hmac=contact_lookup_hmac(normalized),
+            verification_state="unverified",
+            created_by_user_id=actor.user_id,
+            created_at=datetime.utcnow(),
+        )
+        db.add(contact)
+        db.flush()
+        db.add_all([
+            CommunicationConsent(
+                contact_point_id=contact.id,
+                purpose="current_visit_link",
+                state=body.customer_contact.current_visit_link_consent,
+                policy_version=_CONSENT_POLICY_VERSION,
+                captured_by_user_id=actor.user_id,
+                captured_at=datetime.utcnow(),
+            ),
+            CommunicationConsent(
+                contact_point_id=contact.id,
+                purpose="current_visit_progress",
+                state=body.customer_contact.current_visit_progress_consent,
+                policy_version=_CONSENT_POLICY_VERSION,
+                captured_by_user_id=actor.user_id,
+                captured_at=datetime.utcnow(),
+            ),
+        ])
     db.commit()
     db.refresh(session)
     return _session_payload(session)

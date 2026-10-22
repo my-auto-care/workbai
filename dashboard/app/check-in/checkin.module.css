@@ -98,6 +98,12 @@
 
 .arrivalChoices { border: 0; display: grid; gap: 10px; margin: 0; padding: 0; }
 .arrivalChoices legend { color: #355462; font-size: 0.82rem; font-weight: 750; margin-bottom: 10px; padding: 0; }
+.consentChoices { background: #f6fbfb; border: 1px solid #c9dedf; border-radius: 12px; display: grid; gap: 12px; margin: 18px 0 0; padding: 17px; }
+.consentChoices legend { color: #254956; font-size: .86rem; font-weight: 800; padding: 0 4px; }
+.consentChoices > p { color: #58717b; font-size: .84rem; line-height: 1.5; margin: -3px 0 2px; max-width: 72ch; }
+.consentChoices label { color: #345560; display: grid; font-size: .8rem; font-weight: 800; gap: 7px; }
+.consentChoices select { appearance: none; background: #fff; border: 1px solid #a8bbc1; border-radius: 10px; color: #1f3a47; font: inherit; font-weight: 500; min-height: 46px; outline: none; padding: 10px 12px; }
+.consentChoices select:focus { border-color: #1fbed4; box-shadow: 0 0 0 4px rgb(31 190 212 / 18%); }
 .arrivalChoice, .arrivalChoiceActive { align-items: center; border: 1px solid #b8c8cb; border-radius: 12px; cursor: pointer; display: flex !important; gap: 13px; min-height: 68px; padding: 13px 15px; transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease; }
 .arrivalChoice { background: #fff; }
 .arrivalChoiceActive { background: #e8f8fa; border-color: #0b899c; box-shadow: 0 0 0 3px rgb(31 190 212 / 14%); }

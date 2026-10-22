@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import advisor_review, billing, checkin, checklists, media, sessions, transcript_processor, vehicle_intel, vehicle_lookup, voice
+from app.api import advisor_review, billing, checkin, checklists, current_visit, media, sessions, transcript_processor, vehicle_intel, vehicle_lookup, voice
 from app.db.session import SessionLocal
 
 logger = logging.getLogger("workbay.scheduler")
@@ -30,7 +30,8 @@ async def _expiry_loop():
         db = SessionLocal()
         try:
             result = sessions.expire_stale_sessions(db)
-            logger.info("Auto-expiry completed: %d session(s) marked abandoned.", result["expired_count"])
+            current_visit_cleanup = current_visit.prune_expired_current_visit_records(db)
+            logger.info("Auto-expiry completed: %d session(s) marked abandoned; %d public rate bucket(s) and %d public audit record(s) pruned.", result["expired_count"], current_visit_cleanup["rate_buckets"], current_visit_cleanup["public_audits"])
         except Exception as exc:
             logger.exception("Session auto-expiry job failed: %s", exc)
         finally:
@@ -62,6 +63,7 @@ app.add_middleware(
 app.include_router(sessions.router, tags=["sessions"])
 app.include_router(checkin.router)
 app.include_router(advisor_review.router)
+app.include_router(current_visit.router)
 app.include_router(checklists.router, tags=["checklists"])
 app.include_router(media.router, tags=["media"])
 if _enabled("WORKBAI_ENABLE_VOICE_INSPECTION"):

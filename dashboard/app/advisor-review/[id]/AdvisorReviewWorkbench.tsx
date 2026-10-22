@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import styles from "./advisor-review.module.css";
 
 type Disposition = "safety" | "maintenance" | "visit_concern" | "monitor" | "no_action" | "needs_clarification";
+type ProgressCode = "checked_in" | "inspection_underway" | "team_reviewing" | "shop_update_available";
 type Session = {
   id: string;
   status: "submitted" | "advisor_reviewed";
@@ -45,6 +46,23 @@ export type AdvisorReviewData = {
   current_visit_readiness: CurrentVisitReadiness;
 };
 
+export type CurrentVisitReleaseData = {
+  feature_enabled: boolean;
+  internal_readiness: CurrentVisitReadiness;
+  manager_delegated: boolean;
+  release: null | {
+    state: "draft" | "manager_approved" | "active" | "revoked";
+    human_owner_user_id: string;
+    prepared_at: string | null;
+    approved_at: string | null;
+    active_projection: null | { revision: number; status_code: ProgressCode };
+    pending_projection: null | { revision: number; status_code: ProgressCode };
+    active_counter_link_expires_at: string | null;
+    contact: { present: boolean; channel: "sms" | "email" | null; verification_state: string | null; consents: Record<string, string> };
+  };
+  outbound_delivery: { enabled: false; reason: string };
+};
+
 type RowDraft = { disposition: Disposition | ""; rationale: string };
 
 const dispositionLabel: Record<Disposition, string> = {
@@ -54,6 +72,13 @@ const dispositionLabel: Record<Disposition, string> = {
   monitor: "Monitor",
   no_action: "No action",
   needs_clarification: "Needs clarification",
+};
+
+const progressLabel: Record<ProgressCode, string> = {
+  checked_in: "Checked in",
+  inspection_underway: "Inspection underway",
+  team_reviewing: "Team reviewing",
+  shop_update_available: "Advisor follow-up requested",
 };
 
 function vehicleLabel(session: Session) {
@@ -111,7 +136,93 @@ function ReviewItem({ item, sessionId, writable, onSaved }: { item: AttentionIte
   );
 }
 
-export function AdvisorReviewWorkbench({ initialReview }: { initialReview: AdvisorReviewData }) {
+function CurrentVisitControl({ initial, sessionId, sessionStatus }: { initial: CurrentVisitReleaseData; sessionId: string; sessionStatus: Session["status"] }) {
+  const [currentVisit, setCurrentVisit] = useState(initial);
+  const [state, setState] = useState<"idle" | "working" | "error">("idle");
+  const [notice, setNotice] = useState("");
+  const [counterLink, setCounterLink] = useState<{ url: string; expires_at: string } | null>(null);
+  const [progress, setProgress] = useState<ProgressCode>("shop_update_available");
+
+  async function refresh() {
+    const response = await fetch(`/api/current-visit/${sessionId}`, { cache: "no-store" });
+    const payload = (await response.json()) as CurrentVisitReleaseData | { detail?: string };
+    if (!response.ok) throw new Error("detail" in payload && payload.detail ? payload.detail : "Unable to load Current Visit status.");
+    setCurrentVisit(payload as CurrentVisitReleaseData);
+  }
+
+  useEffect(() => {
+    let disposed = false;
+    void fetch(`/api/current-visit/${sessionId}`, { cache: "no-store" })
+      .then(async (response) => ({ response, payload: await response.json() as CurrentVisitReleaseData | { detail?: string } }))
+      .then(({ response, payload }) => {
+        if (response.ok && !disposed) setCurrentVisit(payload as CurrentVisitReleaseData);
+      })
+      .catch(() => undefined);
+    return () => { disposed = true; };
+  }, [sessionId, sessionStatus]);
+
+  async function run(action: "prepare" | "approve" | "activate-counter" | "revoke" | "request-progress" | "approve-progress", extra: Record<string, string> = {}) {
+    setState("working");
+    setNotice("");
+    setCounterLink(null);
+    try {
+      const response = await fetch(`/api/current-visit/${sessionId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...extra }) });
+      const payload = (await response.json()) as CurrentVisitReleaseData | { url: string; expires_at: string; message: string } | { detail?: string };
+      if (!response.ok) throw new Error("detail" in payload && payload.detail ? payload.detail : "Unable to update Current Visit.");
+      if ("url" in payload) {
+        setCounterLink({ url: payload.url, expires_at: payload.expires_at });
+        setNotice(payload.message);
+        await refresh();
+      } else {
+        setCurrentVisit(payload as CurrentVisitReleaseData);
+        setNotice(action === "prepare" ? "Current Visit is prepared for manager review. No customer link or message has been created." : "Current Visit state recorded.");
+      }
+      setState("idle");
+    } catch (error) {
+      setState("error");
+      setNotice(error instanceof Error ? error.message : "Unable to update Current Visit.");
+    }
+  }
+
+  const release = currentVisit.release;
+  const ready = currentVisit.internal_readiness.ready_for_future_customer_access;
+  const description = !currentVisit.feature_enabled
+    ? "This test environment has the Current Visit release feature turned off. No customer link, QR, text, or email can be created."
+    : !ready
+      ? "Finish the internal advisor review and controlled-template record before customer access can be considered."
+      : !release
+        ? "Prepare a minimal view-only visit update. A manager must approve it before any link can be activated."
+        : release.state === "draft"
+          ? "A manager must approve this exact customer-safe update before a counter view can be activated."
+          : release.state === "manager_approved"
+            ? "A manager may activate one private 15-minute counter link. It is view-only and is not a text or email."
+            : release.state === "active"
+              ? `The active counter view expires ${release.active_counter_link_expires_at ? new Date(release.active_counter_link_expires_at).toLocaleString() : "soon"}.`
+              : "This customer view is no longer active. A new manager-reviewed release is required to re-open it.";
+  const heading = !currentVisit.feature_enabled ? "Customer access is disabled" : !ready ? "Internal record still needs work" : !release ? "Ready to prepare for manager review" : release.state === "draft" ? "Awaiting manager release review" : release.state === "manager_approved" ? "Approved for a counter view" : release.state === "active" ? "Customer counter view is active" : "Customer access was revoked";
+
+  return (
+    <section className={styles.currentVisit} aria-label="Current Visit release">
+      <div><p className={styles.eyebrow}>Current Visit</p><h2>{heading}</h2><p>{description}</p></div>
+      {currentVisit.feature_enabled && ready && <div className={styles.currentVisitActions}>
+        {!release && <button className={styles.saveButton} type="button" disabled={state === "working"} onClick={() => void run("prepare")}>Prepare for manager review</button>}
+        {release?.state === "draft" && (currentVisit.manager_delegated ? <button className={styles.completeButton} type="button" disabled={state === "working"} onClick={() => void run("approve")}>Approve customer view</button> : <p className={styles.controlHint}>Awaiting an explicitly delegated Current Visit manager.</p>)}
+        {release?.state === "manager_approved" && (currentVisit.manager_delegated ? <button className={styles.completeButton} type="button" disabled={state === "working"} onClick={() => void run("activate-counter")}>Activate 15-minute counter view</button> : <p className={styles.controlHint}>A delegated manager must activate the counter view.</p>)}
+        {release?.state === "active" && <>
+          <div className={styles.progressControls}><label>Next customer update<select value={progress} onChange={(event) => setProgress(event.target.value as ProgressCode)}>{(Object.keys(progressLabel) as ProgressCode[]).map((code) => <option key={code} value={code}>{progressLabel[code]}</option>)}</select></label><button className={styles.saveButton} type="button" disabled={state === "working" || Boolean(release.pending_projection)} onClick={() => void run("request-progress", { status_code: progress })}>{release.pending_projection ? "Manager review pending" : "Request manager update review"}</button></div>
+          {release.pending_projection && currentVisit.manager_delegated && <button className={styles.completeButton} type="button" disabled={state === "working"} onClick={() => void run("approve-progress")}>Publish manager-approved update</button>}
+          {currentVisit.manager_delegated && <button className={styles.revokeButton} type="button" disabled={state === "working"} onClick={() => void run("revoke", { reason: "other" })}>Revoke customer access</button>}
+        </>}
+        {release?.state === "revoked" && <button className={styles.saveButton} type="button" disabled={state === "working"} onClick={() => void run("prepare")}>Prepare replacement for review</button>}
+      </div>}
+      {counterLink && <section className={styles.counterLink}><strong>Private counter link — show once</strong><a href={counterLink.url} target="_blank" rel="noreferrer">Open Current Visit</a><span>Expires {new Date(counterLink.expires_at).toLocaleString()}. It was not sent to the customer.</span></section>}
+      {currentVisit.feature_enabled && <p className={styles.deliveryHold}><strong>Outbound customer messaging is held.</strong> {currentVisit.outbound_delivery.reason}</p>}
+      {notice && <p className={state === "error" ? styles.error : styles.notice} role={state === "error" ? "alert" : "status"}>{notice}</p>}
+    </section>
+  );
+}
+
+export function AdvisorReviewWorkbench({ initialReview, initialCurrentVisit }: { initialReview: AdvisorReviewData; initialCurrentVisit: CurrentVisitReleaseData }) {
   const [review, setReview] = useState(initialReview);
   const [notice, setNotice] = useState("");
   const [completionState, setCompletionState] = useState<"idle" | "working" | "error">("idle");
@@ -119,7 +230,7 @@ export function AdvisorReviewWorkbench({ initialReview }: { initialReview: Advis
   const remaining = review.attention_items.length - saved;
 
   function onDecision(itemId: string, decision: Decision) {
-    setReview((current) => ({ ...current, summary: { ...current.summary, decisions_saved: current.attention_items.some((item) => item.item.id === itemId && item.advisor_decision) ? current.summary.decisions_saved : current.summary.decisions_saved + 1, }, attention_items: current.attention_items.map((item) => item.item.id === itemId ? { ...item, advisor_decision: decision } : item) }));
+    setReview((current) => ({ ...current, summary: { ...current.summary, decisions_saved: current.attention_items.some((item) => item.item.id === itemId && item.advisor_decision) ? current.summary.decisions_saved : current.summary.decisions_saved + 1 }, attention_items: current.attention_items.map((item) => item.item.id === itemId ? { ...item, advisor_decision: decision } : item) }));
   }
 
   async function complete() {
@@ -140,11 +251,9 @@ export function AdvisorReviewWorkbench({ initialReview }: { initialReview: Advis
     <main className={styles.shell}>
       <header className={styles.topbar}><div><p className={styles.eyebrow}>Workbai · advisor workbench</p><h1>{vehicleLabel(review.session)}</h1><p className={styles.concern}><span>Original concern</span>{review.session.customer_concern || "Not recorded"}</p></div><Link className={styles.backLink} href="/queue">Inspection queue</Link></header>
       <section className={styles.context}><div><span>Arrival</span><strong>{review.session.presence_mode === "waiter" ? "Waiter" : "Drop-off"}</strong></div><div><span>Inspection state</span><strong>{review.session.status === "advisor_reviewed" ? "Advisor reviewed" : "Submitted by technician"}</strong></div><div><span>Attention items</span><strong>{review.summary.attention_count}</strong></div><div><span>Decisions saved</span><strong>{saved} of {review.summary.attention_count}</strong></div></section>
-      <section className={styles.boundary}><strong>Internal decision preparation only</strong><span>Customer reporting, estimates, messages, repair authorization, work release, and AI recommendations are unavailable in this workspace.</span></section>
-      <section className={styles.currentVisit} aria-label="Current Visit readiness">
-        <div><p className={styles.eyebrow}>Current Visit</p><h2>{review.current_visit_readiness.ready_for_future_customer_access ? "Internal prerequisites recorded" : "Current Visit not available"}</h2><p>{review.current_visit_readiness.ready_for_future_customer_access ? "This visit has the internal review and controlled-template record required for a future customer-access contract. Customer access is not enabled in this release." : "Customer access remains disabled. Resolve the internal record gaps below; this workspace does not create a link, QR code, message, or delivery."}</p></div>
-        {!review.current_visit_readiness.ready_for_future_customer_access && <ul>{review.current_visit_readiness.reasons.map((reason) => <li key={reason}>{readinessCopy[reason] ?? "An internal access prerequisite is incomplete."}</li>)}</ul>}
-      </section>
+      <section className={styles.boundary}><strong>Internal decision preparation only</strong><span>No estimate, repair authorization, work release, AI recommendation, or outbound customer message is available in this workspace.</span></section>
+      <CurrentVisitControl initial={initialCurrentVisit} sessionId={review.session.id} sessionStatus={review.session.status} />
+      {!review.current_visit_readiness.ready_for_future_customer_access && <section className={styles.readinessReasons} aria-label="Current Visit internal prerequisites"><ul>{review.current_visit_readiness.reasons.map((reason) => <li key={reason}>{readinessCopy[reason] ?? "An internal access prerequisite is incomplete."}</li>)}</ul></section>}
       <section className={styles.quietResults}><div><p className={styles.eyebrow}>Contained inspection record</p><h2>{review.summary.attention_count === 0 ? "No Needs attention items require triage" : "Triage only the items that need attention"}</h2><p>Good: {review.summary.good_count} · N/A: {review.summary.na_count}. They remain a quiet completed-work record—not an upsell list.</p></div></section>
       {review.attention_items.length ? <section className={styles.itemList} aria-label="Advisor disposition items">{review.attention_items.map((item) => <ReviewItem key={item.item.id} item={item} sessionId={review.session.id} writable={review.can_review} onSaved={(decision) => onDecision(item.item.id, decision)} />)}</section> : <section className={styles.empty}><h2>Ready for internal review completion</h2><p>The submitted inspection contains no technician-attested Needs attention items.</p></section>}
       {notice && <p className={completionState === "error" ? styles.error : styles.notice} role={completionState === "error" ? "alert" : "status"}>{notice}</p>}
