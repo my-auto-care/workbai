@@ -18,6 +18,7 @@ type FormState = {
   vehicle_vin: string;
   vehicle_mileage: string;
   customer_concern: string;
+  presence_mode: string;
   checklist_template_id: string;
   assigned_technician_id: string;
 };
@@ -32,6 +33,7 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
     vehicle_vin: "",
     vehicle_mileage: "",
     customer_concern: "",
+    presence_mode: "",
     checklist_template_id: options.checklists[0]?.id ?? "",
     assigned_technician_id: options.technicians[0]?.id ?? "",
   });
@@ -138,6 +140,24 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
         <section className={styles.section}>
           <div className={styles.sectionHead}>
             <span className={styles.step}>02</span>
+            <div><h2>Arrival type</h2><p>Mark the operational handoff before the vehicle goes to the technician.</p></div>
+          </div>
+          <fieldset className={styles.arrivalChoices}>
+            <legend>Is the customer waiting or dropping off?</legend>
+            <label className={form.presence_mode === "waiter" ? styles.arrivalChoiceActive : styles.arrivalChoice}>
+              <input required type="radio" name="presence_mode" value="waiter" checked={form.presence_mode === "waiter"} onChange={(event) => update("presence_mode", event.target.value)} />
+              <span><strong>Waiter</strong><small>Needs a timely progress handoff.</small></span>
+            </label>
+            <label className={form.presence_mode === "dropoff" ? styles.arrivalChoiceActive : styles.arrivalChoice}>
+              <input required type="radio" name="presence_mode" value="dropoff" checked={form.presence_mode === "dropoff"} onChange={(event) => update("presence_mode", event.target.value)} />
+              <span><strong>Drop-off</strong><small>Customer will not wait on site.</small></span>
+            </label>
+          </fieldset>
+        </section>
+
+        <section className={styles.section}>
+          <div className={styles.sectionHead}>
+            <span className={styles.step}>03</span>
             <div><h2>Reason for visit</h2><p>Capture the customer’s words. Do not diagnose or promise work here.</p></div>
           </div>
           <label className={styles.fullLabel}>Customer-stated concern<textarea required minLength={3} maxLength={1000} value={form.customer_concern} onChange={(event) => update("customer_concern", event.target.value)} placeholder="Example: Steering wheel shakes while braking on the highway." rows={4} /></label>
@@ -145,7 +165,7 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
 
         <section className={styles.section}>
           <div className={styles.sectionHead}>
-            <span className={styles.step}>03</span>
+            <span className={styles.step}>04</span>
             <div><h2>Inspection handoff</h2><p>Choose an available shared template and the technician who will own the inspection.</p></div>
           </div>
           <div className={styles.gridTwo}>

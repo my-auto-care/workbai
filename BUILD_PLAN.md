@@ -23,6 +23,12 @@ This Phase 1 build does **not** store customer name, phone, customer portal iden
 
 The UI therefore uses confirmed manual vehicle entry. Plate/VIN scanning will be a later explicit-consent, transient-processing flow with manual fallback. Checklists are available shared templates in this Phase 1 data model; active/retired, shop-owned template governance is a later migration rather than a claim the UI cannot support.
 
+## Phase 1.1: technician inspection workspace
+
+The next build slice snapshots the selected available template and version when an advisor starts a visit, then gives only the assigned technician a controlled, template-driven workspace. An item response may be `good`, `fair`, `poor`, or `na`; attention and N/A require a written reason. The server validates that every item belongs to the visit snapshot, stores one current response per item, and permits a technician to submit only when all snapshot items have an explicit result. Submission means **submitted for advisor review**, not customer delivery, approval, pricing, repair authorization, quality control, or a completed repair.
+
+The bundled Basic Vehicle Inspection Checklist is a named provisional test template. It is not represented as, or substituted for, the controlled inspection sheet. No final field locations, torque values, thresholds, evidence policy, AI diagnosis, plate scan, or customer-facing DVI release will be inferred or enabled by this slice.
+
 ## Project structure
 
 - `backend/app/auth.py`: Auth0 JWT verification and database-derived actor/scope dependency.

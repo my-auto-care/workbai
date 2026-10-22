@@ -4,7 +4,7 @@ import { backendJson } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
-type InspectionStatus = "pending" | "in_progress" | "completed" | "abandoned";
+type InspectionStatus = "pending" | "in_progress" | "submitted" | "completed" | "abandoned";
 type QueueSession = {
   id: string;
   status: InspectionStatus;
@@ -28,6 +28,7 @@ async function getSessions(): Promise<QueueSession[]> {
 const statusStyle: Record<InspectionStatus, string> = {
   pending: "bg-amber-100 text-amber-800 ring-amber-200",
   in_progress: "bg-cyan-100 text-cyan-800 ring-cyan-200",
+  submitted: "bg-violet-100 text-violet-800 ring-violet-200",
   completed: "bg-emerald-100 text-emerald-800 ring-emerald-200",
   abandoned: "bg-slate-100 text-slate-600 ring-slate-200",
 };
@@ -51,7 +52,7 @@ export default async function QueuePage() {
             {sorted.map((session) => {
               const vehicle = [session.vehicle_year, session.vehicle_make, session.vehicle_model].filter(Boolean).join(" ");
               const date = session.started_at ? new Date(session.started_at).toLocaleString() : "Awaiting timestamp";
-              return <Link key={session.id} href={`/sessions/${session.id}`} className="block border-b border-[#e0e7e6] p-5 transition last:border-0 hover:bg-[#f3f9f8]">
+              return <Link key={session.id} href={session.status === "pending" || session.status === "in_progress" || session.status === "submitted" ? `/inspections/${session.id}` : `/sessions/${session.id}`} className="block border-b border-[#e0e7e6] p-5 transition last:border-0 hover:bg-[#f3f9f8]">
                 <div className="flex items-start justify-between gap-4"><div className="min-w-0"><p className="truncate text-lg font-semibold">{vehicle || "Vehicle details pending"}</p>{session.vehicle_vin && <p className="mt-1 font-mono text-xs text-[#63808a]">VIN {session.vehicle_vin}</p>}{session.customer_concern && <p className="mt-2 line-clamp-2 text-sm italic leading-6 text-[#58717b]">&ldquo;{session.customer_concern}&rdquo;</p>}<p className="mt-2 text-xs text-[#718990]">{date}</p></div><span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold capitalize ring-1 ${statusStyle[session.status]}`}>{session.status.replace("_", " ")}</span></div>
               </Link>;
             })}

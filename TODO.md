@@ -7,3 +7,12 @@
 - [x] Build a responsive, professional Check-in screen with a clear handoff, 44px controls, no default gray block buttons, no ambient assistant, and truthful manual-entry messaging while consent-led scanning remains out of scope.
 - [x] Add dashboard container/runtime declarations and non-secret environment templates for the future isolated test release.
 - [x] Validate the isolated candidate with focused compilation/lint/build checks, inspect the diff, and commit it without deploying.
+
+## Phase 1.1 — Template-driven technician inspection
+
+- [x] Require an advisor to mark each new Check-in as exactly **Waiter** or **Drop-off**, and carry that operational fact to technician work without calling it customer contact data.
+- [x] Snapshot the available template JSON and version into the visit at creation; preserve a generic, provisional-template-only rule with no claim to represent the unverified controlled inspection sheet.
+- [x] Add a technician-scoped inspection workspace where every snapshot item receives an explicit result. Require a written note for Needs attention and N/A, and never treat an unfilled item as Good.
+- [x] Permit a technician to submit only a fully rated inspection for advisor review. Do not send customer messages, release a Digital Glovebox view, create an estimate, or turn submission into authorization.
+- [x] Enforce the no-bypass integrity contract: public session creation is unavailable; template section and item identities are structurally validated and globally unique; selected observations must belong to the saved snapshot; the command surface accepts only Good, Needs attention, and N/A.
+- [x] Validate database migration, backend syntax, dashboard lint/build, final container images, and isolated API acceptance scenarios; commit without deploying.

@@ -34,5 +34,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .home-secondary:hover { background: #e8efed; }
 .home-user { color: #6b7e8a; font-size: .875rem; margin-top: 32px; }
 .home-user a { color: #087e91; font-weight: 700; }
+.my-inspections { width: min(100%, 760px); }
+.inspection-links { border-top: 1px solid #c9d7d8; display: grid; margin: 28px 0 22px; }
+.inspection-link { align-items: center; border-bottom: 1px solid #d7e1e0; color: #274c59; display: flex; gap: 18px; justify-content: space-between; padding: 17px 0; text-decoration: none; }
+.inspection-link:hover strong { color: #087e91; }
+.inspection-link span { display: grid; gap: 4px; min-width: 0; }
+.inspection-link strong { font-size: 1.04rem; letter-spacing: -.01em; }
+.inspection-link small { color: #637c84; font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inspection-link em { background: #e2f4f5; border-radius: 999px; color: #0b6978; flex: 0 0 auto; font-size: .72rem; font-style: normal; font-weight: 800; padding: 6px 9px; text-transform: capitalize; }
 
-@media (max-width: 600px) { .workbai-home { align-items: flex-start; padding: 92px 22px 36px; } .home-actions { flex-direction: column; } .home-primary, .home-secondary { justify-content: center; width: 100%; } }
+@media (max-width: 600px) { .workbai-home { align-items: flex-start; padding: 92px 22px 36px; } .home-actions { flex-direction: column; } .home-primary, .home-secondary { justify-content: center; width: 100%; } .inspection-link { align-items: flex-start; flex-direction: column; gap: 9px; } .inspection-link em { align-self: flex-start; } }

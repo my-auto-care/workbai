@@ -43,8 +43,9 @@ export async function backendFetch(path: string, init: RequestInit = {}): Promis
   if (!response.ok) {
     let detail = "The inspection service could not complete this request";
     try {
-      const body = (await response.json()) as { detail?: string };
+      const body = (await response.json()) as { detail?: string | { message?: string } };
       if (typeof body.detail === "string") detail = body.detail;
+      if (body.detail && typeof body.detail === "object" && typeof body.detail.message === "string") detail = body.detail.message;
     } catch {
       // Preserve a safe, generic message for malformed upstream responses.
     }

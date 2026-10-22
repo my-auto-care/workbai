@@ -1,33 +1,28 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Literal, Optional
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from app.auth import StaffActor, get_current_actor, require_internal_scheduler, require_roles, scoped_session_or_404
-from app.db.models import Finding, FindingCondition, InspectionSession, Media, SessionStatus, User, UserRole, Vehicle
+from app.db.models import (
+    ChecklistTemplate,
+    Finding,
+    FindingCondition,
+    InspectionItemResponse,
+    InspectionSession,
+    Media,
+    SessionStatus,
+    User,
+    UserRole,
+    Vehicle,
+)
 from app.db.session import get_db
+from app.inspection_template import validated_template_snapshot
 
 router = APIRouter()
-
-
-class SessionCreate(BaseModel):
-    """Legacy-compatible inspection start payload. Shop scope is never accepted from the caller."""
-
-    model_config = ConfigDict(extra="forbid")
-    technician_id: Optional[uuid.UUID] = None
-    assigned_technician_id: Optional[uuid.UUID] = None
-    vehicle_id: Optional[uuid.UUID] = None
-    vehicle_year: Optional[int] = None
-    vehicle_make: Optional[str] = None
-    vehicle_model: Optional[str] = None
-    vehicle_vin: Optional[str] = None
-    vehicle_mileage: Optional[int] = None
-    checklist_template_id: Optional[uuid.UUID] = None
-    customer_concern: Optional[str] = None
-    status: Optional[str] = None
 
 
 class FindingCreate(BaseModel):
@@ -43,38 +38,77 @@ class FindingUpdate(BaseModel):
     condition: Optional[FindingCondition] = None
 
 
+class InspectionItemRecord(BaseModel):
+    """A controlled technician response to one item in this visit's template snapshot."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    condition: Literal["good", "poor", "na"]
+    note: Optional[str] = Field(default=None, max_length=2_000)
+    measurement: Optional[str] = Field(default=None, max_length=128)
+    selected_option: Optional[str] = Field(default=None, max_length=128)
+
+    @field_validator("note", "measurement", "selected_option")
+    @classmethod
+    def blank_to_none(cls, value: Optional[str]) -> Optional[str]:
+        return value.strip() if value and value.strip() else None
+
+    @model_validator(mode="after")
+    def require_explanation_when_not_good(self):
+        if self.condition in {"poor", "na"} and not self.note:
+            raise ValueError("A written note is required for Needs attention or N/A")
+        return self
+
+
 def _value(value):
     return value.value if hasattr(value, "value") else value
 
 
-def _session_dict(s):
+def _session_dict(inspection: InspectionSession):
     return {
-        "id": str(s.id),
-        "shop_id": str(s.shop_id),
-        "technician_id": str(s.technician_id) if s.technician_id else None,
-        "assigned_technician_id": str(s.assigned_technician_id) if s.assigned_technician_id else None,
-        "status": _value(s.status),
-        "customer_concern": s.customer_concern,
-        "vehicle_year": s.vehicle_year,
-        "vehicle_make": s.vehicle_make,
-        "vehicle_model": s.vehicle_model,
-        "vehicle_vin": s.vehicle_vin,
-        "vehicle_mileage": s.vehicle_mileage,
-        "checklist_template_id": str(s.checklist_template_id) if s.checklist_template_id else None,
-        "started_at": s.started_at,
-        "completed_at": s.completed_at,
+        "id": str(inspection.id),
+        "shop_id": str(inspection.shop_id),
+        "technician_id": str(inspection.technician_id) if inspection.technician_id else None,
+        "assigned_technician_id": str(inspection.assigned_technician_id) if inspection.assigned_technician_id else None,
+        "status": _value(inspection.status),
+        "customer_concern": inspection.customer_concern,
+        "presence_mode": inspection.presence_mode,
+        "vehicle_year": inspection.vehicle_year,
+        "vehicle_make": inspection.vehicle_make,
+        "vehicle_model": inspection.vehicle_model,
+        "vehicle_vin": inspection.vehicle_vin,
+        "vehicle_mileage": inspection.vehicle_mileage,
+        "checklist_template_id": str(inspection.checklist_template_id) if inspection.checklist_template_id else None,
+        "template_version": inspection.template_version,
+        "started_at": inspection.started_at,
+        "inspection_submitted_at": inspection.inspection_submitted_at,
+        "completed_at": inspection.completed_at,
     }
 
 
-def _media_dict(m, with_url: bool = False):
-    data = {"id": str(m.id), "media_type": _value(m.media_type), "s3_key": m.s3_key}
+def _media_dict(media: Media, with_url: bool = False):
+    data = {"id": str(media.id), "media_type": _value(media.media_type), "s3_key": media.s3_key}
     if with_url:
         try:
             from app.api.media import presigned_read_url
-            data["url"] = presigned_read_url(m.s3_key)
+
+            data["url"] = presigned_read_url(media.s3_key)
         except Exception:
             data["url"] = None
     return data
+
+
+def _response_dict(response: InspectionItemResponse):
+    return {
+        "id": str(response.id),
+        "template_item_id": response.template_item_id,
+        "condition": _value(response.condition),
+        "note": response.note,
+        "measurement": response.measurement,
+        "selected_option": (response.response_data or {}).get("selected_option"),
+        "recorded_at": response.recorded_at,
+        "updated_at": response.updated_at,
+    }
 
 
 def _operator_or_403(actor: StaffActor) -> None:
@@ -82,13 +116,43 @@ def _operator_or_403(actor: StaffActor) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient staff role")
 
 
-def _assigned_technician_or_403(session: InspectionSession, actor: StaffActor) -> None:
-    if actor.role == UserRole.technician and actor.user_id not in {session.technician_id, session.assigned_technician_id}:
+def _assigned_technician_or_403(inspection: InspectionSession, actor: StaffActor) -> None:
+    if actor.role == UserRole.technician and actor.user_id not in {inspection.technician_id, inspection.assigned_technician_id}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inspection is not assigned to this technician")
 
 
+def _snapshot_item_specs(snapshot: object) -> dict[str, dict]:
+    """Return only controlled item nodes from the saved template snapshot."""
+    if not isinstance(snapshot, dict):
+        return {}
+    sections = snapshot.get("sections")
+    if not isinstance(sections, list):
+        return {}
+
+    items: dict[str, dict] = {}
+    for section in sections:
+        if not isinstance(section, dict) or not isinstance(section.get("items"), list):
+            continue
+        for item in section["items"]:
+            if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"].strip():
+                items[item["id"]] = item
+    return items
+
+
+def _template_snapshot_or_409(inspection: InspectionSession) -> tuple[dict, dict[str, dict]]:
+    try:
+        snapshot = validated_template_snapshot(inspection.template_snapshot)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This inspection has no valid controlled template snapshot. Start a new provisional-template inspection instead.",
+        ) from exc
+    specs = _snapshot_item_specs(snapshot)
+    return snapshot, specs
+
+
 def expire_stale_sessions(db: Session) -> dict:
-    """Scheduler-only helper: expire in-progress sessions older than 24 hours."""
+    """Scheduler-only helper: expire active, unsubmitted sessions older than 24 hours."""
     cutoff = datetime.utcnow() - timedelta(hours=24)
     stale = db.query(InspectionSession).filter(
         InspectionSession.status == SessionStatus.in_progress,
@@ -127,59 +191,6 @@ def list_sessions(
     return [_session_dict(inspection) for inspection in query.order_by(InspectionSession.started_at.desc()).limit(100).all()]
 
 
-@router.post("/sessions", status_code=status.HTTP_201_CREATED)
-def create_session(
-    body: SessionCreate,
-    actor: StaffActor = Depends(get_current_actor),
-    db: Session = Depends(get_db),
-):
-    _operator_or_403(actor)
-    requested_technician = body.assigned_technician_id or body.technician_id
-    if actor.role == UserRole.technician:
-        if requested_technician and requested_technician != actor.user_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Technicians may only start their own inspection")
-        technician_id = actor.user_id
-        initial_status = SessionStatus.in_progress
-    else:
-        if not requested_technician:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="An assigned technician is required")
-        technician = db.query(User).filter(
-            User.id == requested_technician,
-            User.shop_id == actor.shop_id,
-            User.active.is_(True),
-            User.role == UserRole.technician,
-        ).one_or_none()
-        if not technician:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Select an active technician in this shop")
-        technician_id = technician.id
-        initial_status = SessionStatus.pending if body.status == "pending" else SessionStatus.in_progress
-
-    if body.vehicle_id:
-        vehicle = db.query(Vehicle).filter(Vehicle.id == body.vehicle_id, Vehicle.shop_id == actor.shop_id).one_or_none()
-        if not vehicle:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Vehicle is not available in this shop")
-
-    inspection = InspectionSession(
-        shop_id=actor.shop_id,
-        technician_id=technician_id,
-        assigned_technician_id=technician_id,
-        vehicle_id=body.vehicle_id,
-        vehicle_year=str(body.vehicle_year) if body.vehicle_year else None,
-        vehicle_make=body.vehicle_make,
-        vehicle_model=body.vehicle_model,
-        vehicle_vin=body.vehicle_vin,
-        vehicle_mileage=body.vehicle_mileage,
-        checklist_template_id=body.checklist_template_id,
-        customer_concern=body.customer_concern,
-        status=initial_status,
-        started_at=datetime.utcnow(),
-    )
-    db.add(inspection)
-    db.commit()
-    db.refresh(inspection)
-    return _session_dict(inspection)
-
-
 @router.get("/sessions/{session_id}")
 def get_session(session_id: uuid.UUID, actor: StaffActor = Depends(get_current_actor), db: Session = Depends(get_db)):
     _operator_or_403(actor)
@@ -195,8 +206,34 @@ def get_session(session_id: uuid.UUID, actor: StaffActor = Depends(get_current_a
         }
         for finding in inspection.findings
     ]
+    payload["item_responses"] = [_response_dict(response) for response in inspection.item_responses]
     payload["media"] = [_media_dict(media, with_url=True) for media in inspection.media]
     return payload
+
+
+@router.get("/sessions/{session_id}/inspection-workspace")
+def inspection_workspace(
+    session_id: uuid.UUID,
+    actor: StaffActor = Depends(get_current_actor),
+    db: Session = Depends(get_db),
+):
+    _operator_or_403(actor)
+    inspection = scoped_session_or_404(db.get(InspectionSession, session_id), actor, require_assigned_technician=True)
+    snapshot, specs = _template_snapshot_or_409(inspection)
+    return {
+        "session": _session_dict(inspection),
+        "template": {
+            "id": str(inspection.checklist_template_id),
+            "version": inspection.template_version,
+            "name": snapshot.get("name", "Provisional inspection template"),
+            "description": snapshot.get("description"),
+            "sections": snapshot.get("sections", []),
+        },
+        "responses": [_response_dict(response) for response in inspection.item_responses],
+        "summary": {"item_count": len(specs), "response_count": len(inspection.item_responses)},
+        "can_record": actor.role == UserRole.technician,
+        "can_submit": actor.role == UserRole.technician and inspection.status == SessionStatus.in_progress,
+    }
 
 
 @router.post("/sessions/{session_id}/start")
@@ -211,12 +248,95 @@ def start_session(session_id: uuid.UUID, actor: StaffActor = Depends(require_rol
     return _session_dict(inspection)
 
 
+@router.put("/sessions/{session_id}/inspection-items/{item_id}")
+def record_inspection_item(
+    session_id: uuid.UUID,
+    item_id: str,
+    body: InspectionItemRecord,
+    actor: StaffActor = Depends(require_roles(UserRole.technician)),
+    db: Session = Depends(get_db),
+):
+    inspection = scoped_session_or_404(db.get(InspectionSession, session_id), actor, require_assigned_technician=True)
+    _assigned_technician_or_403(inspection, actor)
+    if inspection.status != SessionStatus.in_progress:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Item responses require an active inspection")
+
+    _, specs = _template_snapshot_or_409(inspection)
+    item = specs.get(item_id)
+    if not item:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Item is not part of this inspection template snapshot")
+    allowed_options = item.get("options")
+    if body.selected_option and (not isinstance(allowed_options, list) or body.selected_option not in allowed_options):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Selected observation is not allowed for this template item")
+
+    response = db.query(InspectionItemResponse).filter(
+        InspectionItemResponse.session_id == inspection.id,
+        InspectionItemResponse.template_item_id == item_id,
+    ).one_or_none()
+    if response is None:
+        response = InspectionItemResponse(
+            session_id=inspection.id,
+            template_item_id=item_id,
+            recorded_by_user_id=actor.user_id,
+            condition=FindingCondition(body.condition),
+        )
+        db.add(response)
+    response.condition = FindingCondition(body.condition)
+    response.note = body.note
+    response.measurement = body.measurement
+    response.response_data = {"selected_option": body.selected_option} if body.selected_option else {}
+    response.recorded_by_user_id = actor.user_id
+    db.commit()
+    db.refresh(response)
+    return _response_dict(response)
+
+
+@router.post("/sessions/{session_id}/submit-inspection")
+def submit_inspection_for_advisor_review(
+    session_id: uuid.UUID,
+    actor: StaffActor = Depends(require_roles(UserRole.technician)),
+    db: Session = Depends(get_db),
+):
+    inspection = scoped_session_or_404(db.get(InspectionSession, session_id), actor, require_assigned_technician=True)
+    _assigned_technician_or_403(inspection, actor)
+    if inspection.status != SessionStatus.in_progress:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only active inspections may be submitted")
+
+    _, specs = _template_snapshot_or_409(inspection)
+    recorded = {
+        response.template_item_id
+        for response in db.query(InspectionItemResponse.template_item_id)
+        .filter(InspectionItemResponse.session_id == inspection.id)
+        .all()
+    }
+    missing = sorted(set(specs) - recorded)
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"message": "Every applicable template item needs an explicit result before submission", "missing_item_ids": missing},
+        )
+
+    inspection.status = SessionStatus.submitted
+    inspection.inspection_submitted_at = datetime.utcnow()
+    db.commit()
+    db.refresh(inspection)
+    return {
+        "session": _session_dict(inspection),
+        "message": "Inspection submitted for advisor review. No customer report, estimate, message, or approval was created.",
+    }
+
+
 @router.post("/sessions/{session_id}/complete")
 def complete_session(session_id: uuid.UUID, actor: StaffActor = Depends(require_roles(UserRole.technician)), db: Session = Depends(get_db)):
     inspection = scoped_session_or_404(db.get(InspectionSession, session_id), actor, require_assigned_technician=True)
     _assigned_technician_or_403(inspection, actor)
+    if inspection.template_snapshot:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Template-driven inspections must be submitted for advisor review; technician completion is not a customer or repair completion state.",
+        )
     if inspection.status != SessionStatus.in_progress:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only active inspections may be completed")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only active legacy inspections may be completed")
     inspection.status = SessionStatus.completed
     inspection.completed_at = datetime.utcnow()
     db.commit()
@@ -228,6 +348,8 @@ def complete_session(session_id: uuid.UUID, actor: StaffActor = Depends(require_
 def create_finding(session_id: uuid.UUID, body: FindingCreate, actor: StaffActor = Depends(require_roles(UserRole.technician)), db: Session = Depends(get_db)):
     inspection = scoped_session_or_404(db.get(InspectionSession, session_id), actor, require_assigned_technician=True)
     _assigned_technician_or_403(inspection, actor)
+    if inspection.template_snapshot:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Use the controlled inspection-item response command for template-driven inspections")
     if inspection.status != SessionStatus.in_progress:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Findings require an active inspection")
     finding = Finding(
@@ -248,6 +370,8 @@ def update_finding(finding_id: uuid.UUID, body: FindingUpdate, actor: StaffActor
     finding = db.get(Finding, finding_id)
     inspection = scoped_session_or_404(finding.session if finding else None, actor, require_assigned_technician=True)
     _assigned_technician_or_403(inspection, actor)
+    if inspection.template_snapshot:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Use the controlled inspection-item response command for template-driven inspections")
     if inspection.status != SessionStatus.in_progress:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Findings require an active inspection")
     if body.transcript is not None:
@@ -267,16 +391,7 @@ def get_report(session_id: uuid.UUID, actor: StaffActor = Depends(get_current_ac
     inspection = scoped_session_or_404(db.get(InspectionSession, session_id), actor, require_assigned_technician=True)
     return {
         "report": {
-            "session_id": str(inspection.id),
-            "status": _value(inspection.status),
-            "started_at": inspection.started_at,
-            "completed_at": inspection.completed_at,
-            "customer_concern": inspection.customer_concern,
-            "vehicle_year": inspection.vehicle_year,
-            "vehicle_make": inspection.vehicle_make,
-            "vehicle_model": inspection.vehicle_model,
-            "vehicle_vin": inspection.vehicle_vin,
-            "vehicle_mileage": inspection.vehicle_mileage,
+            **_session_dict(inspection),
             "findings": [
                 {
                     "id": str(finding.id),
@@ -288,6 +403,7 @@ def get_report(session_id: uuid.UUID, actor: StaffActor = Depends(get_current_ac
                 }
                 for finding in inspection.findings
             ],
+            "item_responses": [_response_dict(response) for response in inspection.item_responses],
         }
     }
 

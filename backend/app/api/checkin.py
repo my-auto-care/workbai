@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.auth import StaffActor, require_roles
 from app.db.models import ChecklistTemplate, InspectionSession, SessionStatus, User, UserRole
 from app.db.session import get_db
+from app.inspection_template import validated_template_snapshot
 
 router = APIRouter(prefix="/check-in", tags=["check-in"])
 _ADVISOR_OR_ADMIN = require_roles(UserRole.advisor, UserRole.admin)
@@ -30,6 +32,7 @@ class CheckinCreate(BaseModel):
     vehicle_vin: str | None = Field(default=None, max_length=17)
     vehicle_mileage: int | None = Field(default=None, ge=0, le=2_000_000)
     customer_concern: str = Field(min_length=3, max_length=1000)
+    presence_mode: Literal["waiter", "dropoff"]
     checklist_template_id: uuid.UUID
     assigned_technician_id: uuid.UUID
 
@@ -55,6 +58,8 @@ def _session_payload(session: InspectionSession) -> dict:
         "vehicle_model": session.vehicle_model,
         "vehicle_vin": session.vehicle_vin,
         "vehicle_mileage": session.vehicle_mileage,
+        "presence_mode": session.presence_mode,
+        "template_version": session.template_version,
         "started_at": session.started_at,
     }
 
@@ -107,12 +112,22 @@ def create_pending_session(
     template = db.get(ChecklistTemplate, body.checklist_template_id)
     if not template:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Select an available shared inspection template")
+    try:
+        snapshot = validated_template_snapshot(template.items)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Selected inspection template is structurally invalid and cannot be used for a new visit",
+        ) from exc
 
     session = InspectionSession(
         shop_id=actor.shop_id,
         technician_id=technician.id,
         assigned_technician_id=technician.id,
         checklist_template_id=template.id,
+        template_snapshot=snapshot,
+        template_version=template.version,
+        presence_mode=body.presence_mode,
         vehicle_year=str(body.vehicle_year),
         vehicle_make=body.vehicle_make,
         vehicle_model=body.vehicle_model,

@@ -3,7 +3,7 @@ import enum
 from datetime import datetime
 from sqlalchemy import (
     Column, String, Text, Integer, Boolean, DateTime,
-    ForeignKey, Enum as SAEnum, JSON
+    ForeignKey, Enum as SAEnum, JSON, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -30,6 +30,7 @@ class UserRole(str, enum.Enum):
 class SessionStatus(str, enum.Enum):
     pending = "pending"
     in_progress = "in_progress"
+    submitted = "submitted"
     completed = "completed"
     abandoned = "abandoned"
 
@@ -129,6 +130,11 @@ class InspectionSession(Base):
     vehicle_vin = Column(String(50))
     vehicle_mileage = Column(Integer, nullable=True)
     vehicle_intel = Column(JSONB, nullable=True)
+    # Phase 1.1: controlled snapshot for the selected provisional template.
+    presence_mode = Column(String(16), nullable=True)
+    template_snapshot = Column(JSONB, nullable=True)
+    template_version = Column(Integer, nullable=True)
+    inspection_submitted_at = Column(DateTime, nullable=True)
     # Dispatch: technician assigned by shop manager
     assigned_technician_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     status = Column(SAEnum(SessionStatus), default=SessionStatus.in_progress)
@@ -144,6 +150,7 @@ class InspectionSession(Base):
     checklist_template = relationship("ChecklistTemplate", back_populates="sessions")
     findings = relationship("Finding", back_populates="session")
     media = relationship("Media", back_populates="session")
+    item_responses = relationship("InspectionItemResponse", back_populates="session")
 
 
 class Finding(Base):
@@ -158,6 +165,28 @@ class Finding(Base):
 
     session = relationship("InspectionSession", back_populates="findings")
     media = relationship("Media", back_populates="finding")
+
+
+class InspectionItemResponse(Base):
+    """One technician-controlled response per item in a visit template snapshot."""
+
+    __tablename__ = "inspection_item_responses"
+    __table_args__ = (
+        UniqueConstraint("session_id", "template_item_id", name="uq_inspection_item_response"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("inspection_sessions.id"), nullable=False)
+    template_item_id = Column(Text, nullable=False)
+    condition = Column(SAEnum(FindingCondition), nullable=False)
+    note = Column(Text, nullable=True)
+    measurement = Column(Text, nullable=True)
+    response_data = Column(JSONB, default={})
+    recorded_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    recorded_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    session = relationship("InspectionSession", back_populates="item_responses")
 
 
 class Media(Base):

@@ -8,22 +8,25 @@ from sqlalchemy.orm import Session
 from app.auth import StaffActor, get_current_actor, require_roles
 from app.db.models import ChecklistTemplate, UserRole
 from app.db.session import get_db
+from app.inspection_template import InspectionTemplateDocument
 
 router = APIRouter()
 
 
 class ChecklistCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
     name: str
     vehicle_filter: Optional[dict] = {}
-    items: dict
+    items: InspectionTemplateDocument
 
 
 class ChecklistUpdate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
     name: Optional[str] = None
     vehicle_filter: Optional[dict] = None
-    items: Optional[dict] = None
+    items: Optional[InspectionTemplateDocument] = None
 
 
 def _staff(actor: StaffActor = Depends(get_current_actor)) -> StaffActor:
@@ -61,7 +64,7 @@ def create_checklist(
     actor: StaffActor = Depends(require_roles(UserRole.admin)),
     db: Session = Depends(get_db),
 ):
-    template = ChecklistTemplate(name=body.name, vehicle_filter=body.vehicle_filter, items=body.items)
+    template = ChecklistTemplate(name=body.name, vehicle_filter=body.vehicle_filter, items=body.items.storage_dict())
     db.add(template)
     db.commit()
     db.refresh(template)
@@ -83,7 +86,7 @@ def update_checklist(
     if body.vehicle_filter is not None:
         template.vehicle_filter = body.vehicle_filter
     if body.items is not None:
-        template.items = body.items
+        template.items = body.items.storage_dict()
         template.version += 1
     db.commit()
     db.refresh(template)
