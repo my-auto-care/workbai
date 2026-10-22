@@ -35,6 +35,12 @@ The next allowed slice is a single-visit, advisor/admin-only workbench for a tec
 
 This state is an internal review record—not a diagnosis, estimate, customer DVI/Glovebox release, message, repair authorization, appointment, or AI recommendation. Technician observations remain separate from advisor dispositions. The next customer-facing release, pricing, evidence, torque, AI, plate scan, and controlled inspection-sheet work remain separate gates.
 
+## Phase 1.3: Controlled Template Governance
+
+New Check-in sessions must use exactly one active **approved**, non-provisional inspection template. A draft stays editable; an approved template is immutable to preserve the snapshot contract; a retired template is unavailable for new visits but remains readable for historical inspection records. Approving a template requires a named source reference, SHA-256 artifact hash, a recorded administrator, and an explicit no-longer-provisional declaration. The exact inspection-sheet artifact is still unavailable in this build, so no bundled template may be marked approved or made active.
+
+This is template governance only. It does not digitize or infer the unverified sheet’s rows, torque values, field locations, thresholds, layout, vehicle logic, or evidence policy. It does not release a customer view, send an invitation, enable a camera scan, or authorize AI diagnosis.
+
 ## Project structure
 
 - `backend/app/auth.py`: Auth0 JWT verification and database-derived actor/scope dependency.

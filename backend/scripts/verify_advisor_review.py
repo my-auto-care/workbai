@@ -4,11 +4,12 @@ Run only against a disposable database with the current application source mount
 """
 
 from threading import Barrier, Thread
+from datetime import datetime
 
 from fastapi.testclient import TestClient
 
 from app.auth import StaffActor, get_current_actor
-from app.db.models import ChecklistTemplate, Shop, User, UserRole
+from app.db.models import ChecklistTemplate, Shop, TemplateLifecycleStatus, User, UserRole
 from app.db.session import SessionLocal
 from app.main import app
 
@@ -27,9 +28,18 @@ with SessionLocal() as db:
     advisor = User(shop_id=shop.id, auth0_id="auth0|advisor", role=UserRole.advisor, name="Advisor", active=True)
     technician = User(shop_id=shop.id, auth0_id="auth0|tech", role=UserRole.technician, name="Technician", active=True)
     other_advisor = User(shop_id=other_shop.id, auth0_id="auth0|other-advisor", role=UserRole.advisor, name="Other advisor", active=True)
+    db.add_all([advisor, technician, other_advisor])
+    db.flush()
     template = ChecklistTemplate(
         name="Provisional reviewer template",
         version=1,
+        lifecycle_status=TemplateLifecycleStatus.approved,
+        is_provisional=False,
+        active_for_new_visits=True,
+        source_reference="isolated advisor-review acceptance fixture",
+        source_sha256="a" * 64,
+        approved_at=datetime.utcnow(),
+        approved_by_user_id=advisor.id,
         items={
             "name": "Provisional reviewer template",
             "sections": [{
@@ -42,7 +52,7 @@ with SessionLocal() as db:
             }],
         },
     )
-    db.add_all([advisor, technician, other_advisor, template])
+    db.add(template)
     db.commit()
     advisor_id, tech_id, other_advisor_id = advisor.id, technician.id, other_advisor.id
     shop_id, other_shop_id, template_id = shop.id, other_shop.id, template.id
@@ -61,7 +71,6 @@ with TestClient(app) as client:
             "vehicle_mileage": 18300,
             "customer_concern": "Brake pedal vibration on a highway stop.",
             "presence_mode": "dropoff",
-            "checklist_template_id": str(template_id),
             "assigned_technician_id": str(tech_id),
         },
     )

@@ -24,3 +24,11 @@
 - [x] Require a written advisor rationale for every attention-item disposition; show Good and N/A work as a contained count rather than a sales list.
 - [x] Keep technician observations and advisor dispositions separate, attribute the advisor reviewer, prevent cross-shop review, and block review completion until every Needs attention item has a saved human decision; serialize competing save/complete commands on the canonical visit row.
 - [x] Validate the migration, role/scope/state boundaries, lint/build, images, and isolated API acceptance scenarios—including simultaneous completion attempts—and commit without deploying.
+
+## Phase 1.3 — Controlled Template Governance
+
+- [x] Add an additive template lifecycle: Draft, Approved, and Retired, plus an explicit provisional flag and immutable provenance fields. Every pre-governance record is permanently locked provisional and inactive; no existing provisional template may silently become approved.
+- [x] Allow exactly one non-provisional, artifact-hash-backed approved template to be active for new Check-in sessions; block template edits after approval and preserve retired templates plus their source provenance for historical inspection snapshots.
+- [x] Build an admin-only professional template-governance interface that shows lifecycle/provenance honestly and makes approval and retirement explicit; remove the obsolete gray/dark template-editor surface.
+- [x] Make Check-in truthfully unavailable when there is no active approved non-provisional template, and select/lock the one active controlled template on the server rather than accepting a browser-selected template ID.
+- [x] Validate lifecycle serialization, approval requirements, Check-in selection, immutability, retirement, migration, lint/build, image builds, and isolated API acceptance; commit without deployment.

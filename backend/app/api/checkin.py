@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.auth import StaffActor, require_roles
-from app.db.models import ChecklistTemplate, InspectionSession, SessionStatus, User, UserRole
+from app.db.models import ChecklistTemplate, InspectionSession, SessionStatus, TemplateLifecycleStatus, User, UserRole
 from app.db.session import get_db
 from app.inspection_template import validated_template_snapshot
 
@@ -33,7 +33,6 @@ class CheckinCreate(BaseModel):
     vehicle_mileage: int | None = Field(default=None, ge=0, le=2_000_000)
     customer_concern: str = Field(min_length=3, max_length=1000)
     presence_mode: Literal["waiter", "dropoff"]
-    checklist_template_id: uuid.UUID
     assigned_technician_id: uuid.UUID
 
     @field_validator("vehicle_vin")
@@ -79,7 +78,16 @@ def checkin_options(
         .order_by(User.name.asc())
         .all()
     )
-    templates = db.query(ChecklistTemplate).order_by(ChecklistTemplate.name.asc(), ChecklistTemplate.version.desc()).all()
+    templates = (
+        db.query(ChecklistTemplate)
+        .filter(
+            ChecklistTemplate.lifecycle_status == TemplateLifecycleStatus.approved,
+            ChecklistTemplate.is_provisional.is_(False),
+            ChecklistTemplate.active_for_new_visits.is_(True),
+        )
+        .order_by(ChecklistTemplate.name.asc(), ChecklistTemplate.version.desc())
+        .all()
+    )
     return {
         "actor": {"name": actor.name, "role": actor.role.value, "shop_id": str(actor.shop_id)},
         "technicians": [{"id": str(user.id), "name": user.name} for user in technicians],
@@ -109,9 +117,24 @@ def create_pending_session(
     if not technician:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Select an active technician in this shop")
 
-    template = db.get(ChecklistTemplate, body.checklist_template_id)
-    if not template:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Select an available shared inspection template")
+    templates = (
+        db.query(ChecklistTemplate)
+        .with_for_update()
+        .filter(
+            ChecklistTemplate.lifecycle_status == TemplateLifecycleStatus.approved,
+            ChecklistTemplate.is_provisional.is_(False),
+            ChecklistTemplate.active_for_new_visits.is_(True),
+        )
+        .all()
+    )
+    if len(templates) != 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A single active approved inspection template is required before a new visit can be started",
+        )
+    template = templates[0]
+    if not template.source_reference or not template.source_sha256 or not template.approved_at or not template.approved_by_user_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="The active inspection template is missing required approval provenance")
     try:
         snapshot = validated_template_snapshot(template.items)
     except ValueError as exc:
@@ -127,6 +150,10 @@ def create_pending_session(
         checklist_template_id=template.id,
         template_snapshot=snapshot,
         template_version=template.version,
+        template_source_reference=template.source_reference,
+        template_source_sha256=template.source_sha256,
+        template_approved_at=template.approved_at,
+        template_approved_by_user_id=template.approved_by_user_id,
         presence_mode=body.presence_mode,
         vehicle_year=str(body.vehicle_year),
         vehicle_make=body.vehicle_make,

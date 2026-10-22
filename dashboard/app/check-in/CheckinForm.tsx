@@ -19,7 +19,6 @@ type FormState = {
   vehicle_mileage: string;
   customer_concern: string;
   presence_mode: string;
-  checklist_template_id: string;
   assigned_technician_id: string;
 };
 
@@ -34,7 +33,6 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
     vehicle_mileage: "",
     customer_concern: "",
     presence_mode: "",
-    checklist_template_id: options.checklists[0]?.id ?? "",
     assigned_technician_id: options.technicians[0]?.id ?? "",
   });
   const [state, setState] = useState<"idle" | "saving" | "success" | "error">("idle");
@@ -45,6 +43,8 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
     () => options.technicians.length > 0 && options.checklists.length > 0,
     [options.checklists.length, options.technicians.length],
   );
+  const missingTemplate = options.checklists.length === 0;
+  const missingTechnician = options.technicians.length === 0;
 
   function update(key: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -115,7 +115,8 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
       {!ready && (
         <section className={styles.blocked} role="alert">
           <h2>Setup is incomplete</h2>
-          <p>Check-in requires at least one active technician and one active inspection template for this shop. No visit can be created until both are available.</p>
+          {missingTemplate && <p>No approved, non-provisional inspection template is active. An administrator must record and approve the verified controlled artifact before any visit can begin.</p>}
+          {missingTechnician && <p className={missingTemplate ? "mt-2" : ""}>No active technician is available in this shop. Assign an active technician before beginning Check-in.</p>}
         </section>
       )}
 
@@ -166,10 +167,10 @@ export function CheckinForm({ options, userName }: { options: CheckinOptions; us
         <section className={styles.section}>
           <div className={styles.sectionHead}>
             <span className={styles.step}>04</span>
-            <div><h2>Inspection handoff</h2><p>Choose an available shared template and the technician who will own the inspection.</p></div>
+            <div><h2>Inspection handoff</h2><p>The active controlled template is selected by governance; choose the technician who will own the inspection.</p></div>
           </div>
           <div className={styles.gridTwo}>
-            <label>Inspection template<select required value={form.checklist_template_id} onChange={(event) => update("checklist_template_id", event.target.value)}>{options.checklists.length === 0 ? <option value="">No available templates</option> : options.checklists.map((checklist) => <option key={checklist.id} value={checklist.id}>{checklist.name} · v{checklist.version}</option>)}</select></label>
+            <label>Active inspection template<select value={options.checklists[0]?.id ?? ""} disabled><option value="">{options.checklists.length === 0 ? "No approved template is active" : `${options.checklists[0].name} · v${options.checklists[0].version}`}</option></select></label>
             <label>Assigned technician<select required value={form.assigned_technician_id} onChange={(event) => update("assigned_technician_id", event.target.value)}>{options.technicians.length === 0 ? <option value="">No active technicians</option> : options.technicians.map((technician) => <option key={technician.id} value={technician.id}>{technician.name}</option>)}</select></label>
           </div>
           <div className={styles.handoff}><span aria-hidden="true">→</span><p>Creates a pending Workbai inspection. The technician starts it when the vehicle enters the bay.</p></div>

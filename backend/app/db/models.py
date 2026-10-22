@@ -52,6 +52,12 @@ class AdvisorDisposition(str, enum.Enum):
     needs_clarification = "needs_clarification"
 
 
+class TemplateLifecycleStatus(str, enum.Enum):
+    draft = "draft"
+    approved = "approved"
+    retired = "retired"
+
+
 class MediaType(str, enum.Enum):
     photo = "photo"
     video = "video"
@@ -119,10 +125,22 @@ class ChecklistTemplate(Base):
     vehicle_filter = Column(JSONB, default={})
     version = Column(Integer, default=1)
     items = Column(JSONB, nullable=False)
+    lifecycle_status = Column(SAEnum(TemplateLifecycleStatus), default=TemplateLifecycleStatus.draft, nullable=False)
+    is_provisional = Column(Boolean, default=True, nullable=False)
+    locked_provisional = Column(Boolean, default=False, nullable=False)
+    active_for_new_visits = Column(Boolean, default=False, nullable=False)
+    source_reference = Column(Text, nullable=True)
+    source_sha256 = Column(String(64), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    approved_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    retired_at = Column(DateTime, nullable=True)
+    retired_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     sessions = relationship("InspectionSession", back_populates="checklist_template")
+    approved_by = relationship("User", foreign_keys=[approved_by_user_id])
+    retired_by = relationship("User", foreign_keys=[retired_by_user_id])
 
 
 class InspectionSession(Base):
@@ -140,10 +158,14 @@ class InspectionSession(Base):
     vehicle_vin = Column(String(50))
     vehicle_mileage = Column(Integer, nullable=True)
     vehicle_intel = Column(JSONB, nullable=True)
-    # Phase 1.1: controlled snapshot for the selected provisional template.
+    # Controlled immutable snapshot of the exact approved template used by this visit.
     presence_mode = Column(String(16), nullable=True)
     template_snapshot = Column(JSONB, nullable=True)
     template_version = Column(Integer, nullable=True)
+    template_source_reference = Column(Text, nullable=True)
+    template_source_sha256 = Column(String(64), nullable=True)
+    template_approved_at = Column(DateTime, nullable=True)
+    template_approved_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     inspection_submitted_at = Column(DateTime, nullable=True)
     advisor_reviewed_at = Column(DateTime, nullable=True)
     advisor_reviewed_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
@@ -159,6 +181,7 @@ class InspectionSession(Base):
     technician = relationship("User", back_populates="sessions", foreign_keys=[technician_id])
     assigned_technician = relationship("User", foreign_keys=[assigned_technician_id])
     advisor_reviewer = relationship("User", foreign_keys=[advisor_reviewed_by_user_id])
+    template_approver = relationship("User", foreign_keys=[template_approved_by_user_id])
     vehicle = relationship("Vehicle", back_populates="sessions")
     checklist_template = relationship("ChecklistTemplate", back_populates="sessions")
     findings = relationship("Finding", back_populates="session")

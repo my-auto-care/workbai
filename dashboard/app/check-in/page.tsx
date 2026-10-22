@@ -21,7 +21,7 @@ export default async function CheckInPage() {
           <p className="eyebrow">Workbai · staff workspace</p>
           <h1 id="checkin-unavailable-title">Check-in is not ready for this account</h1>
           <p>{detail}</p>
-          <p className="muted">A manager must assign active staff, a shop, and an inspection template before visits can be started.</p>
+          <p className="muted">A manager must assign active staff and activate one approved, non-provisional inspection template before visits can be started.</p>
           <a className="text-link" href="/auth/logout">Sign out</a>
         </section>
       </main>
