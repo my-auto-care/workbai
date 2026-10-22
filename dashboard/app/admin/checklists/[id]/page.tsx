@@ -3,8 +3,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-const API = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://167.99.153.77';
-
 interface Item { id: string; label: string; category: string; }
 
 export default function EditChecklistPage({ params }: { params: { id: string } }) {
@@ -16,7 +14,7 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch(`${API}/checklists/${params.id}`)
+    fetch(`/api/checklists/${params.id}`)
       .then(r => r.json())
       .then(data => {
         setName(data.name || '');
@@ -36,15 +34,15 @@ export default function EditChecklistPage({ params }: { params: { id: string } }
     if (items.some(i => !i.label.trim())) { setError('All items need a label'); return; }
     setSaving(true); setError('');
     try {
-      const res = await fetch(`${API}/checklists/${params.id}`, {
+      const res = await fetch(`/api/checklists/${params.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, items: { items } }),
       });
       if (!res.ok) throw new Error('Failed to save');
       router.push('/admin/checklists');
-    } catch (e: any) {
-      setError(e.message);
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'Failed to save');
       setSaving(false);
     }
   };

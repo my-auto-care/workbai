@@ -11,10 +11,11 @@ import os
 import logging
 import asyncio
 import httpx
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from typing import Optional
+from app.auth import get_current_actor
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_actor)])
 logger = logging.getLogger("workbay.vehicle")
 
 PLATE_RECOGNIZER_TOKEN = os.getenv("PLATE_RECOGNIZER_TOKEN")

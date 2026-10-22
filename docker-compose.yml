@@ -15,6 +15,16 @@ services:
     restart: unless-stopped
     entrypoint: ["python", "-m", "app.voice.agent", "start"]
 
+  dashboard:
+    build: ./dashboard
+    env_file:
+      - ./dashboard/.env
+    environment:
+      WORKBAI_BACKEND_INTERNAL_URL: http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
   nginx:
     image: nginx:alpine
     ports:
@@ -25,5 +35,5 @@ services:
       - /etc/ssl/workbay:/etc/ssl/workbay:ro
       - /var/www/certbot:/var/www/certbot:ro
     depends_on:
-      - backend
+      - dashboard
     restart: unless-stopped
