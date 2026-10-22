@@ -83,6 +83,7 @@ class Shop(Base):
 
     users = relationship("User", back_populates="shop")
     vehicles = relationship("Vehicle", back_populates="shop")
+    customers = relationship("Customer", back_populates="shop")
     sessions = relationship("InspectionSession", back_populates="shop")
 
 
@@ -112,10 +113,213 @@ class Vehicle(Base):
     make = Column(Text)
     model = Column(Text)
     mileage = Column(Integer)
+    vehicle_catalog_entry_id = Column(UUID(as_uuid=True), ForeignKey("vehicle_catalog_entries.id"), nullable=True)
+    vin_encrypted = Column(Text, nullable=True)
+    vin_encryption_key_id = Column(String(128), nullable=True)
+    vin_lookup_hmac = Column(String(64), nullable=True)
+    vin_tail_lookup_hmac = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     shop = relationship("Shop", back_populates="vehicles")
     sessions = relationship("InspectionSession", back_populates="vehicle")
+    catalog_entry = relationship("VehicleCatalogEntry", back_populates="shop_vehicles")
+    customer_links = relationship("CustomerVehicleLink", back_populates="vehicle")
+
+
+class Customer(Base):
+    """Staff-only customer profile. PII stays encrypted; lookup uses blind indexes."""
+
+    __tablename__ = "customers"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    display_name_encrypted = Column(Text, nullable=False)
+    encryption_key_id = Column(String(128), nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    shop = relationship("Shop", back_populates="customers")
+    contacts = relationship("CustomerContactMethod", back_populates="customer")
+    search_tokens = relationship("CustomerSearchToken", back_populates="customer")
+    vehicle_links = relationship("CustomerVehicleLink", back_populates="customer")
+    sessions = relationship("InspectionSession", back_populates="customer", foreign_keys="InspectionSession.customer_id")
+    context_records = relationship("CustomerContextRecord", back_populates="customer")
+
+
+class CustomerContactMethod(Base):
+    """Long-lived profile contact, distinct from the visit-scoped Current Visit contact."""
+
+    __tablename__ = "customer_contact_methods"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False)
+    channel = Column(String(16), nullable=False)
+    encrypted_destination = Column(Text, nullable=False)
+    encryption_key_id = Column(String(128), nullable=False)
+    lookup_hmac = Column(String(64), nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    retired_at = Column(DateTime, nullable=True)
+
+    customer = relationship("Customer", back_populates="contacts")
+
+
+class CustomerSearchToken(Base):
+    """HMAC-only typeahead token. It contains no plaintext PII or reversible query."""
+
+    __tablename__ = "customer_search_tokens"
+    __table_args__ = (UniqueConstraint("customer_id", "field", "token_hmac", name="uq_customer_search_token"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False)
+    field = Column(String(32), nullable=False)
+    token_hmac = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    customer = relationship("Customer", back_populates="search_tokens")
+
+
+class VehicleCatalogEntry(Base):
+    """Provider-sourced reference vehicle data; never a customer vehicle or diagnostic source."""
+
+    __tablename__ = "vehicle_catalog_entries"
+    __table_args__ = (UniqueConstraint("source_name", "model_year", "source_make_id", "source_model_id", name="uq_vehicle_catalog_source_model"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_name = Column(String(64), nullable=False)
+    source_make_id = Column(String(64), nullable=False)
+    source_model_id = Column(String(64), nullable=False)
+    model_year = Column(Integer, nullable=False)
+    make = Column(String(100), nullable=False)
+    model = Column(String(100), nullable=False)
+    vehicle_type = Column(String(64), nullable=True)
+    search_text = Column(Text, nullable=False)
+    source_url = Column(Text, nullable=False)
+    source_retrieved_at = Column(DateTime, nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    shop_vehicles = relationship("Vehicle", back_populates="catalog_entry")
+    reason_suggestions = relationship("IntakeReasonSuggestion", back_populates="vehicle_catalog_entry")
+
+
+class CustomerVehicleLink(Base):
+    """Human-confirmed relationship; it does not establish legal ownership or authority."""
+
+    __tablename__ = "customer_vehicle_links"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False)
+    vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id"), nullable=False)
+    relationship_code = Column(String(32), nullable=False, default="customer_confirmed")
+    active = Column(Boolean, nullable=False, default=True)
+    confirmed_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    confirmed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    ended_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    ended_at = Column(DateTime, nullable=True)
+
+    customer = relationship("Customer", back_populates="vehicle_links")
+    vehicle = relationship("Vehicle", back_populates="customer_links")
+
+
+class CustomerContextRecord(Base):
+    """Encrypted, visit-bound imported context excluded from normal history/report payloads."""
+
+    __tablename__ = "customer_context_records"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
+    vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id"), nullable=True)
+    inspection_session_id = Column(UUID(as_uuid=True), ForeignKey("inspection_sessions.id"), nullable=False)
+    source_type = Column(String(32), nullable=False)
+    source_label = Column(String(160), nullable=False)
+    source_reference_hmac = Column(String(64), nullable=True)
+    source_recorded_at = Column(DateTime, nullable=False)
+    appointment_at = Column(DateTime, nullable=True)
+    raw_content_ciphertext = Column(Text, nullable=True)
+    reviewed_excerpt_ciphertext = Column(Text, nullable=False)
+    encryption_key_id = Column(String(128), nullable=False)
+    review_state = Column(String(32), nullable=False, default="reviewed")
+    reviewed_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    reviewed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    raw_retention_until = Column(DateTime, nullable=True)
+    raw_purged_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    customer = relationship("Customer", back_populates="context_records")
+    session = relationship("InspectionSession", foreign_keys=[inspection_session_id])
+
+
+class CustomerContextAccessAudit(Base):
+    """Factual log of raw-context reads; it never contains the context, query, or customer name."""
+
+    __tablename__ = "customer_context_access_audits"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    context_record_id = Column(UUID(as_uuid=True), ForeignKey("customer_context_records.id"), nullable=False)
+    actor_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    purpose = Column(String(64), nullable=False)
+    occurred_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class CustomerProfileAccessAudit(Base):
+    """Minimal staff access audit for a protected customer card; no caller query or PII is retained."""
+
+    __tablename__ = "customer_profile_access_audits"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False)
+    actor_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    purpose = Column(String(64), nullable=False)
+    occurred_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class IntakeReasonSuggestion(Base):
+    """Human-curated wording prompt with provenance; never a diagnosis or maintenance claim."""
+
+    __tablename__ = "intake_reason_suggestions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
+    vehicle_catalog_entry_id = Column(UUID(as_uuid=True), ForeignKey("vehicle_catalog_entries.id"), nullable=True)
+    source_context_record_id = Column(UUID(as_uuid=True), ForeignKey("customer_context_records.id"), nullable=True)
+    scope = Column(String(32), nullable=False)
+    phrase_ciphertext = Column(Text, nullable=False)
+    phrase_hmac = Column(String(64), nullable=False)
+    encryption_key_id = Column(String(128), nullable=False)
+    source_label = Column(String(160), nullable=False)
+    source_revision = Column(String(128), nullable=False)
+    state = Column(String(32), nullable=False, default="approved")
+    approved_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    approved_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    retired_at = Column(DateTime, nullable=True)
+
+    vehicle_catalog_entry = relationship("VehicleCatalogEntry", back_populates="reason_suggestions")
+
+
+class IntakeReasonSuggestionSelection(Base):
+    """Append-only record of a source-backed wording draft selected for a canonical visit."""
+
+    __tablename__ = "intake_reason_suggestion_selections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
+    inspection_session_id = Column(UUID(as_uuid=True), ForeignKey("inspection_sessions.id"), nullable=False)
+    context_record_id = Column(UUID(as_uuid=True), ForeignKey("customer_context_records.id"), nullable=True)
+    curated_suggestion_id = Column(UUID(as_uuid=True), ForeignKey("intake_reason_suggestions.id"), nullable=True)
+    source_key = Column(String(64), nullable=False)
+    selected_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    selected_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class ChecklistTemplate(Base):
@@ -149,6 +353,8 @@ class InspectionSession(Base):
     shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=False)
     technician_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     vehicle_id = Column(UUID(as_uuid=True), ForeignKey("vehicles.id"), nullable=True)
+    customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
+    customer_vehicle_link_id = Column(UUID(as_uuid=True), ForeignKey("customer_vehicle_links.id"), nullable=True)
     checklist_template_id = Column(UUID(as_uuid=True), ForeignKey("checklist_templates.id"))
     customer_concern = Column(Text)
     # Denormalized vehicle info for MVP (no pre-existing vehicle record required)
@@ -183,6 +389,8 @@ class InspectionSession(Base):
     advisor_reviewer = relationship("User", foreign_keys=[advisor_reviewed_by_user_id])
     template_approver = relationship("User", foreign_keys=[template_approved_by_user_id])
     vehicle = relationship("Vehicle", back_populates="sessions")
+    customer = relationship("Customer", back_populates="sessions", foreign_keys=[customer_id])
+    customer_vehicle_link = relationship("CustomerVehicleLink", foreign_keys=[customer_vehicle_link_id])
     checklist_template = relationship("ChecklistTemplate", back_populates="sessions")
     findings = relationship("Finding", back_populates="session")
     media = relationship("Media", back_populates="session")

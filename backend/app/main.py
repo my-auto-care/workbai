@@ -31,7 +31,8 @@ async def _expiry_loop():
         try:
             result = sessions.expire_stale_sessions(db)
             current_visit_cleanup = current_visit.prune_expired_current_visit_records(db)
-            logger.info("Auto-expiry completed: %d session(s) marked abandoned; %d public rate bucket(s) and %d public audit record(s) pruned.", result["expired_count"], current_visit_cleanup["rate_buckets"], current_visit_cleanup["public_audits"])
+            customer_context_cleanup = checkin.prune_expired_customer_context_records(db)
+            logger.info("Auto-expiry completed: %d session(s) marked abandoned; %d public rate bucket(s), %d public audit record(s), and %d raw customer-context record(s) pruned.", result["expired_count"], current_visit_cleanup["rate_buckets"], current_visit_cleanup["public_audits"], customer_context_cleanup["raw_context_purged"])
         except Exception as exc:
             logger.exception("Session auto-expiry job failed: %s", exc)
         finally:

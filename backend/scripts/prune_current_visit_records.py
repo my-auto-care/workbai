@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import sys
 
+from app.api.checkin import prune_expired_customer_context_records
 from app.api.current_visit import prune_expired_current_visit_records
 from app.db.session import SessionLocal
 
@@ -18,8 +19,14 @@ logger = logging.getLogger("workbay.current_visit_cleanup")
 def main() -> int:
     db = SessionLocal()
     try:
-        result = prune_expired_current_visit_records(db)
-        logger.info("Current Visit retention cleanup completed: %d rate bucket(s), %d audit record(s).", result["rate_buckets"], result["public_audits"])
+        current_visit = prune_expired_current_visit_records(db)
+        customer_context = prune_expired_customer_context_records(db)
+        logger.info(
+            "Retention cleanup completed: %d rate bucket(s), %d public audit record(s), %d raw customer-context record(s).",
+            current_visit["rate_buckets"],
+            current_visit["public_audits"],
+            customer_context["raw_context_purged"],
+        )
         return 0
     except Exception:
         logger.exception("Current Visit retention cleanup failed")
