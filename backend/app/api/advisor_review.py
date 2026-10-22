@@ -7,6 +7,7 @@ release a customer view, create an authorization, or change technician evidence.
 from __future__ import annotations
 
 import uuid
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -19,10 +20,12 @@ from app.auth import StaffActor, require_roles, scoped_session_or_404
 from app.db.models import (
     AdvisorDisposition,
     AdvisorReviewItem,
+    ChecklistTemplate,
     FindingCondition,
     InspectionItemResponse,
     InspectionSession,
     SessionStatus,
+    TemplateLifecycleStatus,
     UserRole,
 )
 from app.db.session import get_db
@@ -99,6 +102,45 @@ def _attention_items(inspection: InspectionSession) -> tuple[dict, dict[str, Ins
     return snapshot, attention, specs
 
 
+def _current_visit_readiness(inspection: InspectionSession, db: Session) -> dict:
+    """Evaluate only immutable internal prerequisites for a later customer-access contract.
+
+    This deliberately does not issue a URL, token, QR code, delivery request, or
+    customer projection. The result gives advisors a truthful, server-derived
+    explanation of why Current Visit remains unavailable in this build.
+    """
+    reasons: list[str] = []
+    if inspection.status != SessionStatus.advisor_reviewed:
+        reasons.append("advisor_review_incomplete")
+    if not inspection.advisor_reviewed_at or not inspection.advisor_reviewed_by_user_id:
+        reasons.append("advisor_review_audit_missing")
+    if not isinstance(inspection.template_snapshot, dict):
+        reasons.append("template_snapshot_missing")
+    if not inspection.checklist_template_id:
+        reasons.append("template_reference_missing")
+    if not inspection.template_source_reference or not re.fullmatch(r"[a-f0-9]{64}", inspection.template_source_sha256 or ""):
+        reasons.append("template_provenance_missing")
+    if not inspection.template_approved_at or not inspection.template_approved_by_user_id:
+        reasons.append("template_approval_missing")
+
+    template = db.get(ChecklistTemplate, inspection.checklist_template_id) if inspection.checklist_template_id else None
+    if template is None:
+        reasons.append("template_record_missing")
+    elif (
+        template.is_provisional
+        or template.lifecycle_status not in {TemplateLifecycleStatus.approved, TemplateLifecycleStatus.retired}
+        or template.source_reference != inspection.template_source_reference
+        or template.source_sha256 != inspection.template_source_sha256
+    ):
+        reasons.append("template_provenance_unverified")
+
+    return {
+        "ready_for_future_customer_access": not reasons,
+        "customer_access_enabled": False,
+        "reasons": reasons,
+    }
+
+
 @router.get("/sessions/{session_id}/advisor-review")
 def advisor_review_workspace(
     session_id: uuid.UUID,
@@ -139,6 +181,7 @@ def advisor_review_workspace(
         },
         "can_review": inspection.status == SessionStatus.submitted,
         "customer_release_available": False,
+        "current_visit_readiness": _current_visit_readiness(inspection, db),
     }
 
 
@@ -216,4 +259,5 @@ def complete_advisor_review(
     return {
         "session": _session_dict(inspection),
         "message": "Advisor review recorded. No customer report, estimate, message, repair authorization, or work release was created.",
+        "current_visit_readiness": _current_visit_readiness(inspection, db),
     }

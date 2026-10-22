@@ -32,3 +32,9 @@
 - [x] Build an admin-only professional template-governance interface that shows lifecycle/provenance honestly and makes approval and retirement explicit; remove the obsolete gray/dark template-editor surface.
 - [x] Make Check-in truthfully unavailable when there is no active approved non-provisional template, and select/lock the one active controlled template on the server rather than accepting a browser-selected template ID.
 - [x] Validate lifecycle serialization, approval requirements, Check-in selection, immutability, retirement, migration, lint/build, image builds, and isolated API acceptance; commit without deployment.
+
+## Phase 1.4 — Current Visit readiness, not release
+
+- [x] Add a server-derived advisor-only readiness result based on immutable advisor-review and controlled-template provenance facts; do not issue or persist a customer URL, token, QR code, or delivery record.
+- [x] Surface readiness as a quiet internal workbench state with explicit block reasons and no public/share/send/customer action.
+- [x] Validate that the advisor-review lifecycle still locks correctly and that no Current Visit release capability is added; commit without deployment.

@@ -30,6 +30,11 @@ type AttentionItem = {
   technician_response: { condition: "poor"; note?: string | null; measurement?: string | null; selected_option?: string | null };
   advisor_decision: Decision | null;
 };
+type CurrentVisitReadiness = {
+  ready_for_future_customer_access: boolean;
+  customer_access_enabled: false;
+  reasons: string[];
+};
 
 export type AdvisorReviewData = {
   session: Session;
@@ -37,6 +42,7 @@ export type AdvisorReviewData = {
   summary: { attention_count: number; decisions_saved: number; good_count: number; na_count: number };
   can_review: boolean;
   customer_release_available: false;
+  current_visit_readiness: CurrentVisitReadiness;
 };
 
 type RowDraft = { disposition: Disposition | ""; rationale: string };
@@ -53,6 +59,17 @@ const dispositionLabel: Record<Disposition, string> = {
 function vehicleLabel(session: Session) {
   return [session.vehicle_year, session.vehicle_make, session.vehicle_model].filter(Boolean).join(" ") || "Vehicle details pending";
 }
+
+const readinessCopy: Record<string, string> = {
+  advisor_review_incomplete: "Complete the internal advisor review first.",
+  advisor_review_audit_missing: "The advisor-review audit record is incomplete.",
+  template_snapshot_missing: "This visit does not retain a controlled template snapshot.",
+  template_reference_missing: "This visit has no controlled template reference.",
+  template_provenance_missing: "This visit is missing verified template provenance.",
+  template_approval_missing: "This visit is missing template approval attribution.",
+  template_record_missing: "The referenced controlled template record is unavailable.",
+  template_provenance_unverified: "The retained template record no longer verifies this visit’s controlled provenance.",
+};
 
 async function command(id: string, body: Record<string, string>): Promise<Decision | { session: Session; message: string }> {
   const response = await fetch(`/api/advisor-review/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -109,8 +126,8 @@ export function AdvisorReviewWorkbench({ initialReview }: { initialReview: Advis
     setCompletionState("working");
     setNotice("");
     try {
-      const result = await command(review.session.id, { action: "complete" }) as { session: Session; message: string };
-      setReview((current) => ({ ...current, session: result.session, can_review: false }));
+      const result = await command(review.session.id, { action: "complete" }) as { session: Session; message: string; current_visit_readiness: CurrentVisitReadiness };
+      setReview((current) => ({ ...current, session: result.session, can_review: false, current_visit_readiness: result.current_visit_readiness }));
       setNotice(result.message);
       setCompletionState("idle");
     } catch (error) {
@@ -124,6 +141,10 @@ export function AdvisorReviewWorkbench({ initialReview }: { initialReview: Advis
       <header className={styles.topbar}><div><p className={styles.eyebrow}>Workbai · advisor workbench</p><h1>{vehicleLabel(review.session)}</h1><p className={styles.concern}><span>Original concern</span>{review.session.customer_concern || "Not recorded"}</p></div><Link className={styles.backLink} href="/queue">Inspection queue</Link></header>
       <section className={styles.context}><div><span>Arrival</span><strong>{review.session.presence_mode === "waiter" ? "Waiter" : "Drop-off"}</strong></div><div><span>Inspection state</span><strong>{review.session.status === "advisor_reviewed" ? "Advisor reviewed" : "Submitted by technician"}</strong></div><div><span>Attention items</span><strong>{review.summary.attention_count}</strong></div><div><span>Decisions saved</span><strong>{saved} of {review.summary.attention_count}</strong></div></section>
       <section className={styles.boundary}><strong>Internal decision preparation only</strong><span>Customer reporting, estimates, messages, repair authorization, work release, and AI recommendations are unavailable in this workspace.</span></section>
+      <section className={styles.currentVisit} aria-label="Current Visit readiness">
+        <div><p className={styles.eyebrow}>Current Visit</p><h2>{review.current_visit_readiness.ready_for_future_customer_access ? "Internal prerequisites recorded" : "Current Visit not available"}</h2><p>{review.current_visit_readiness.ready_for_future_customer_access ? "This visit has the internal review and controlled-template record required for a future customer-access contract. Customer access is not enabled in this release." : "Customer access remains disabled. Resolve the internal record gaps below; this workspace does not create a link, QR code, message, or delivery."}</p></div>
+        {!review.current_visit_readiness.ready_for_future_customer_access && <ul>{review.current_visit_readiness.reasons.map((reason) => <li key={reason}>{readinessCopy[reason] ?? "An internal access prerequisite is incomplete."}</li>)}</ul>}
+      </section>
       <section className={styles.quietResults}><div><p className={styles.eyebrow}>Contained inspection record</p><h2>{review.summary.attention_count === 0 ? "No Needs attention items require triage" : "Triage only the items that need attention"}</h2><p>Good: {review.summary.good_count} · N/A: {review.summary.na_count}. They remain a quiet completed-work record—not an upsell list.</p></div></section>
       {review.attention_items.length ? <section className={styles.itemList} aria-label="Advisor disposition items">{review.attention_items.map((item) => <ReviewItem key={item.item.id} item={item} sessionId={review.session.id} writable={review.can_review} onSaved={(decision) => onDecision(item.item.id, decision)} />)}</section> : <section className={styles.empty}><h2>Ready for internal review completion</h2><p>The submitted inspection contains no technician-attested Needs attention items.</p></section>}
       {notice && <p className={completionState === "error" ? styles.error : styles.notice} role={completionState === "error" ? "alert" : "status"}>{notice}</p>}

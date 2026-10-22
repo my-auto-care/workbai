@@ -1,5 +1,5 @@
 .shell { min-height: 100vh; background: #f1ece3; color: #1f3a47; padding: clamp(24px, 4vw, 56px); }
-.topbar, .context, .boundary, .quietResults, .itemList, .completePanel, .empty, .notice, .error { margin-left: auto; margin-right: auto; max-width: 1120px; }
+.topbar, .context, .boundary, .currentVisit, .quietResults, .itemList, .completePanel, .empty, .notice, .error { margin-left: auto; margin-right: auto; max-width: 1120px; }
 .topbar { align-items: flex-end; border-bottom: 1px solid #cad7da; display: flex; gap: 24px; justify-content: space-between; padding-bottom: 26px; }
 .eyebrow, .recordLabel, .itemMeta { color: #617a83; font-size: .7rem; font-weight: 800; letter-spacing: .1em; margin: 0; text-transform: uppercase; }
 .topbar h1 { font-size: clamp(2rem, 5vw, 3.2rem); letter-spacing: -.045em; line-height: 1; margin: 7px 0 0; }
@@ -13,6 +13,10 @@
 .context strong { color: #294a55; font-size: .94rem; }
 .boundary { align-items: baseline; background: #e7f4f4; border-left: 3px solid #087e91; color: #41646c; display: flex; flex-wrap: wrap; font-size: .88rem; gap: 8px 13px; line-height: 1.5; margin-bottom: 20px; padding: 13px 16px; }
 .boundary strong { color: #175f6c; }
+.currentVisit { background: #f8f4eb; border: 1px solid #d9d0bf; border-radius: 16px; display: grid; gap: 14px; margin-bottom: 16px; padding: 20px 22px; }
+.currentVisit h2 { font-size: 1.08rem; letter-spacing: -.018em; margin: 6px 0 0; }
+.currentVisit p:not(.eyebrow) { color: #58717a; font-size: .9rem; line-height: 1.55; margin: 8px 0 0; }
+.currentVisit ul { color: #76534a; font-size: .85rem; line-height: 1.5; margin: 0; padding-left: 18px; }
 .quietResults, .reviewItem, .empty, .completePanel { background: #fbf8f2; border: 1px solid #d4dedf; border-radius: 16px; box-shadow: 0 14px 36px rgb(26 56 68 / 6%); }
 .quietResults { margin-bottom: 16px; padding: 24px 26px; }
 .quietResults h2, .completePanel h2, .empty h2 { font-size: 1.25rem; letter-spacing: -.022em; margin: 6px 0 0; }

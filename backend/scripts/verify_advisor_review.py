@@ -96,6 +96,11 @@ with TestClient(app) as client:
     assert workspace.status_code == 200, workspace.text
     assert workspace.json()["summary"] == {"attention_count": 1, "decisions_saved": 0, "good_count": 1, "na_count": 0}
     assert workspace.json()["customer_release_available"] is False
+    assert workspace.json()["current_visit_readiness"] == {
+        "ready_for_future_customer_access": False,
+        "customer_access_enabled": False,
+        "reasons": ["advisor_review_incomplete", "advisor_review_audit_missing"],
+    }
     assert client.post(f"/sessions/{session_id}/advisor-review/complete").status_code == 422
     saved = client.put(
         f"/sessions/{session_id}/advisor-review/items/brk_002",
@@ -124,6 +129,12 @@ with TestClient(app) as client:
     assert sorted(completion_statuses) == [200, 409], completion_statuses
     completed = client.get(f"/sessions/{session_id}/advisor-review")
     assert completed.status_code == 200 and completed.json()["session"]["status"] == "advisor_reviewed", completed.text
+    assert completed.json()["customer_release_available"] is False
+    assert completed.json()["current_visit_readiness"] == {
+        "ready_for_future_customer_access": True,
+        "customer_access_enabled": False,
+        "reasons": [],
+    }
     assert client.put(f"/sessions/{session_id}/advisor-review/items/brk_002", json={"disposition": "monitor", "rationale": "Attempted post-review rewrite."}).status_code == 409
 
     as_actor(tech_id, shop_id, UserRole.technician, "Technician")

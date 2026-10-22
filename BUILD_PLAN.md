@@ -41,6 +41,12 @@ New Check-in sessions must use exactly one active **approved**, non-provisional 
 
 This is template governance only. It does not digitize or infer the unverified sheet’s rows, torque values, field locations, thresholds, layout, vehicle logic, or evidence policy. It does not release a customer view, send an invitation, enable a camera scan, or authorize AI diagnosis.
 
+## Phase 1.4: Current Visit readiness only
+
+The advisor workbench may expose a server-derived **Current Visit readiness** status after internal review. It evaluates only immutable visit facts: completed/attributed advisor review, a template snapshot, and matching approved-template provenance. It creates **no** token, link, QR code, customer identity, invitation, message, delivery attempt, report, estimate, authorization, or customer-facing endpoint.
+
+A future Digital Glovebox access release requires its own reviewed customer identity/access policy, random-secret and hashed-token lifecycle, expiry/revocation/access audit, rate limiting, log redaction, explicit minimized public projection, no-store/no-referrer/CSP headers, and customer delivery/consent contract. None of those public-access mechanisms are part of this candidate.
+
 ## Project structure
 
 - `backend/app/auth.py`: Auth0 JWT verification and database-derived actor/scope dependency.
