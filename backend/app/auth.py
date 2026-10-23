@@ -6,6 +6,7 @@ active Workbai user, and every route uses that server-derived scope.
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import threading
@@ -16,12 +17,12 @@ from uuid import UUID
 
 import httpx
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import InvalidTokenError
 from sqlalchemy.orm import Session
 
-from app.db.models import User, UserRole
+from app.db.models import SessionStatus, User, UserRole
 from app.db.session import get_db
 
 _bearer = HTTPBearer(auto_error=False)
@@ -171,9 +172,70 @@ def scoped_session_or_404(session, actor: StaffActor, *, require_assigned_techni
     return session
 
 
+def _secret_matches(provided: str | None, expected: str) -> bool:
+    """Constant-time comparison of two shared secrets (bytes, so any header value is safe)."""
+    if not provided or not expected:
+        return False
+    return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
+
+
 def require_internal_scheduler(secret: str | None) -> None:
     expected = os.getenv("WORKBAI_SCHEDULER_SECRET", "")
     if not expected:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Scheduler credential is not configured")
-    if not secret or not __import__("hmac").compare_digest(secret, expected):
+    if not _secret_matches(secret, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Internal scheduler authentication required")
+
+
+# ---------------------------------------------------------------------------
+# Voice agent service credential
+# ---------------------------------------------------------------------------
+# The LiveKit voice worker is not a staff member and has no Auth0 identity. It
+# authenticates with a shared secret (WORKBAI_VOICE_AGENT_TOKEN) sent in its
+# own header, never as a bearer token. The credential is accepted only by the
+# handful of routes that take get_actor_or_voice_agent, and only for an active
+# (in_progress) legacy inspection, i.e. one the worker can actually be in.
+
+VOICE_AGENT_TOKEN_ENV = "WORKBAI_VOICE_AGENT_TOKEN"
+SERVICE_TOKEN_HEADER = "X-Workbai-Service-Token"
+MIN_SERVICE_TOKEN_LENGTH = 32
+
+
+@dataclass(frozen=True)
+class VoiceAgentPrincipal:
+    """The voice worker: no shop, role or user id of its own."""
+
+    name: str = "voice-agent"
+
+
+VOICE_AGENT = VoiceAgentPrincipal()
+
+
+def voice_agent_token_valid(provided: str | None) -> bool:
+    expected = os.getenv(VOICE_AGENT_TOKEN_ENV, "")
+    if len(expected) < MIN_SERVICE_TOKEN_LENGTH:
+        # Unset or too short to be a real secret: the service credential is off.
+        return False
+    return _secret_matches(provided, expected)
+
+
+def get_actor_or_voice_agent(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    service_token: str | None = Header(default=None, alias=SERVICE_TOKEN_HEADER),
+    db: Session = Depends(get_db),
+) -> StaffActor | VoiceAgentPrincipal:
+    """Staff Auth0 actor, or the voice worker when it presents its service token."""
+    if service_token is not None:
+        if credentials is not None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Send a staff token or a service credential, not both")
+        if not voice_agent_token_valid(service_token):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid service credential")
+        return VOICE_AGENT
+    return get_current_actor(credentials=credentials, db=db)
+
+
+def voice_agent_session_or_404(session):
+    """The voice worker may act only on an active legacy (non-template) inspection."""
+    if not session or session.status != SessionStatus.in_progress or session.template_snapshot is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inspection session not found")
+    return session

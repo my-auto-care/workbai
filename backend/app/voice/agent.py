@@ -20,10 +20,27 @@ from livekit.agents import Agent, AgentSession, function_tool
 from livekit.plugins import assemblyai, elevenlabs, silero
 from livekit.plugins import anthropic as lk_anthropic
 
+from app.voice.backend_client import backend_client
 from app.voice.prompts import SYSTEM_PROMPT_EN, SYSTEM_PROMPT_ES
 
 logger = logging.getLogger("workbay.voice")
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+
+
+def checklist_items(document: object) -> list:
+    """Flatten a checklist document: sectioned templates or the older flat {"items": [...]} shape."""
+    if not isinstance(document, dict):
+        return []
+    sections = document.get("sections")
+    if isinstance(sections, list):
+        return [
+            item
+            for section in sections
+            if isinstance(section, dict) and isinstance(section.get("items"), list)
+            for item in section["items"]
+            if isinstance(item, dict)
+        ]
+    items = document.get("items")
+    return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
 
 
 class WorkbayInspectionAgent(Agent):
@@ -55,8 +72,10 @@ class WorkbayInspectionAgent(Agent):
     async def _load_session_data(self):
         """Load checklist and any pre-existing vehicle data from the session."""
         try:
-            async with httpx.AsyncClient(base_url=BACKEND_URL, timeout=10.0) as client:
+            async with backend_client(10.0) as client:
                 r = await client.get(f"/sessions/{self.session_id}")
+                if r.status_code != 200:
+                    logger.warning(f"Session load returned {r.status_code}")
                 if r.status_code == 200:
                     data = r.json()
 
@@ -65,9 +84,11 @@ class WorkbayInspectionAgent(Agent):
                     if template_id:
                         cr = await client.get(f"/checklists/{template_id}")
                         if cr.status_code == 200:
-                            items = cr.json().get("items", {}).get("items", [])
+                            items = checklist_items(cr.json().get("items"))
                             self._checklist_items = items
                             logger.info(f"Loaded {len(items)} checklist items")
+                        else:
+                            logger.warning(f"Checklist load returned {cr.status_code}")
 
                     # If vehicle info already on session, pre-fetch intel
                     year = data.get("vehicle_year")
@@ -83,13 +104,13 @@ class WorkbayInspectionAgent(Agent):
     async def _fetch_vehicle_intel(self, year, make, model, mileage=None, concern=None):
         """Call the vehicle intelligence endpoint and update agent instructions."""
         try:
-            payload = {"year": int(year), "make": make, "model": model}
+            payload = {"session_id": self.session_id, "year": int(year), "make": make, "model": model}
             if mileage:
                 payload["mileage"] = int(mileage)
             if concern:
                 payload["customer_concern"] = concern
 
-            async with httpx.AsyncClient(base_url=BACKEND_URL, timeout=30.0) as client:
+            async with backend_client(30.0) as client:
                 r = await client.post("/vehicle-intelligence", json=payload)
                 if r.status_code == 200:
                     self._vehicle_intel = r.json()
@@ -186,7 +207,7 @@ class WorkbayInspectionAgent(Agent):
 
         # Save to session
         try:
-            async with httpx.AsyncClient(base_url=BACKEND_URL, timeout=10.0) as client:
+            async with backend_client(10.0) as client:
                 session_data = await client.get(f"/sessions/{self.session_id}")
                 if session_data.status_code == 200:
                     concern = session_data.json().get("customer_concern")
@@ -249,7 +270,7 @@ class WorkbayInspectionAgent(Agent):
     ) -> str:
         """Save a technician finding. Automatically requests photo if condition is poor or fair."""
         try:
-            async with httpx.AsyncClient(base_url=BACKEND_URL, timeout=10.0) as client:
+            async with backend_client(10.0) as client:
                 r = await client.post(f"/sessions/{self.session_id}/findings", json={
                     "checklist_item_id": item_id,
                     "transcript": transcript,
@@ -350,7 +371,7 @@ class WorkbayInspectionAgent(Agent):
     async def mark_complete(self) -> str:
         """Mark the inspection session as complete and generate the report."""
         try:
-            async with httpx.AsyncClient(base_url=BACKEND_URL, timeout=10.0) as client:
+            async with backend_client(10.0) as client:
                 r = await client.post(f"/sessions/{self.session_id}/complete")
                 if r.status_code == 200:
                     return "Inspection complete. Report is ready."

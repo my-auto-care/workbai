@@ -17,8 +17,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
 
-from app.auth import StaffActor, get_current_actor, require_roles
-from app.db.models import ChecklistTemplate, TemplateLifecycleStatus, UserRole
+from app.auth import StaffActor, VoiceAgentPrincipal, get_actor_or_voice_agent, get_current_actor, require_roles
+from app.db.models import ChecklistTemplate, InspectionSession, SessionStatus, TemplateLifecycleStatus, UserRole
 from app.db.session import get_db
 from app.inspection_template import InspectionTemplateDocument, validated_template_snapshot
 
@@ -131,9 +131,32 @@ def list_checklists(actor: StaffActor = Depends(_ADMIN), db: Session = Depends(g
     return [_summary(template) for template in templates]
 
 
+def _voice_agent_template_or_404(checklist_id: uuid.UUID, db: Session) -> ChecklistTemplate:
+    """The voice worker may read only a checklist an active legacy inspection is using."""
+    sessions = (
+        db.query(InspectionSession)
+        .filter(InspectionSession.checklist_template_id == checklist_id, InspectionSession.status == SessionStatus.in_progress)
+        .limit(50)
+        .all()
+    )
+    session = next((candidate for candidate in sessions if candidate.template_snapshot is None), None)
+    template = db.get(ChecklistTemplate, checklist_id) if session else None
+    if not template or template.shop_id != session.shop_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Checklist not found")
+    return template
+
+
 @router.get("/checklists/{checklist_id}")
-def get_checklist(checklist_id: uuid.UUID, actor: StaffActor = Depends(_ADMIN), db: Session = Depends(get_db)):
-    return _detail(_template_or_404(checklist_id, db, actor))
+def get_checklist(
+    checklist_id: uuid.UUID,
+    principal: StaffActor | VoiceAgentPrincipal = Depends(get_actor_or_voice_agent),
+    db: Session = Depends(get_db),
+):
+    if isinstance(principal, VoiceAgentPrincipal):
+        return _detail(_voice_agent_template_or_404(checklist_id, db))
+    if principal.role != UserRole.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient staff role")
+    return _detail(_template_or_404(checklist_id, db, principal))
 
 
 @router.post("/checklists", status_code=status.HTTP_201_CREATED)

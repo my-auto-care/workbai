@@ -6,7 +6,16 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
-from app.auth import StaffActor, get_current_actor, require_internal_scheduler, require_roles, scoped_session_or_404
+from app.auth import (
+    StaffActor,
+    VoiceAgentPrincipal,
+    get_actor_or_voice_agent,
+    get_current_actor,
+    require_internal_scheduler,
+    require_roles,
+    scoped_session_or_404,
+    voice_agent_session_or_404,
+)
 from app.db.models import (
     ChecklistTemplate,
     Finding,
@@ -152,6 +161,22 @@ def _assigned_technician_or_403(inspection: InspectionSession, actor: StaffActor
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inspection is not assigned to this technician")
 
 
+def _technician_or_voice_agent_session(
+    session_id: uuid.UUID,
+    principal: StaffActor | VoiceAgentPrincipal,
+    db: Session,
+) -> InspectionSession:
+    """Session for a technician-only command that the voice worker may also issue."""
+    inspection = db.get(InspectionSession, session_id)
+    if isinstance(principal, VoiceAgentPrincipal):
+        return voice_agent_session_or_404(inspection)
+    if principal.role != UserRole.technician:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient staff role")
+    inspection = scoped_session_or_404(inspection, principal, require_assigned_technician=True)
+    _assigned_technician_or_403(inspection, principal)
+    return inspection
+
+
 def _snapshot_item_specs(snapshot: object) -> dict[str, dict]:
     """Return only controlled item nodes from the saved template snapshot."""
     if not isinstance(snapshot, dict):
@@ -290,9 +315,16 @@ def create_legacy_mobile_session(
 
 
 @router.get("/sessions/{session_id}")
-def get_session(session_id: uuid.UUID, actor: StaffActor = Depends(get_current_actor), db: Session = Depends(get_db)):
-    _operator_or_403(actor)
-    inspection = scoped_session_or_404(db.get(InspectionSession, session_id), actor, require_assigned_technician=True)
+def get_session(
+    session_id: uuid.UUID,
+    principal: StaffActor | VoiceAgentPrincipal = Depends(get_actor_or_voice_agent),
+    db: Session = Depends(get_db),
+):
+    if isinstance(principal, VoiceAgentPrincipal):
+        inspection = voice_agent_session_or_404(db.get(InspectionSession, session_id))
+    else:
+        _operator_or_403(principal)
+        inspection = scoped_session_or_404(db.get(InspectionSession, session_id), principal, require_assigned_technician=True)
     payload = _session_dict(inspection)
     payload["findings"] = [
         {
@@ -428,9 +460,12 @@ def submit_inspection_for_advisor_review(
 
 
 @router.post("/sessions/{session_id}/complete")
-def complete_session(session_id: uuid.UUID, actor: StaffActor = Depends(require_roles(UserRole.technician)), db: Session = Depends(get_db)):
-    inspection = scoped_session_or_404(db.get(InspectionSession, session_id), actor, require_assigned_technician=True)
-    _assigned_technician_or_403(inspection, actor)
+def complete_session(
+    session_id: uuid.UUID,
+    principal: StaffActor | VoiceAgentPrincipal = Depends(get_actor_or_voice_agent),
+    db: Session = Depends(get_db),
+):
+    inspection = _technician_or_voice_agent_session(session_id, principal, db)
     if inspection.template_snapshot:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -450,9 +485,13 @@ def complete_session(session_id: uuid.UUID, actor: StaffActor = Depends(require_
 
 
 @router.post("/sessions/{session_id}/findings", status_code=status.HTTP_201_CREATED)
-def create_finding(session_id: uuid.UUID, body: FindingCreate, actor: StaffActor = Depends(require_roles(UserRole.technician)), db: Session = Depends(get_db)):
-    inspection = scoped_session_or_404(db.get(InspectionSession, session_id), actor, require_assigned_technician=True)
-    _assigned_technician_or_403(inspection, actor)
+def create_finding(
+    session_id: uuid.UUID,
+    body: FindingCreate,
+    principal: StaffActor | VoiceAgentPrincipal = Depends(get_actor_or_voice_agent),
+    db: Session = Depends(get_db),
+):
+    inspection = _technician_or_voice_agent_session(session_id, principal, db)
     if inspection.template_snapshot:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Use the controlled inspection-item response command for template-driven inspections")
     if inspection.status != SessionStatus.in_progress:

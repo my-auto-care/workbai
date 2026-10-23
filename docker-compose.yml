@@ -32,6 +32,11 @@ services:
     build: ./backend
     env_file:
       - ./backend/.env
+    environment:
+      # The worker calls the API over the Compose network; "localhost" inside
+      # this container is not the API. It authenticates with
+      # WORKBAI_VOICE_AGENT_TOKEN from backend/.env.
+      BACKEND_URL: http://backend:8000
     restart: unless-stopped
     entrypoint: ["python", "-m", "app.voice.agent", "start"]
 
