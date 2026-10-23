@@ -15,14 +15,44 @@ from app.db.models import (
     InspectionSession,
     Media,
     SessionStatus,
+    TemplateLifecycleStatus,
     User,
     UserRole,
     Vehicle,
 )
 from app.db.session import get_db
+from app.features import legacy_mobile_sessions_enabled
 from app.inspection_template import validated_template_snapshot
 
 router = APIRouter()
+
+
+class LegacyMobileSessionCreate(BaseModel):
+    """Body the Workbai mobile app sends to start its own (non-template) inspection.
+
+    Shop, technician and status always come from the authenticated technician.
+    ``shop_id``, ``technician_id``, ``assigned_technician_id`` and ``status`` are
+    accepted only so released builds that still send them get a session instead
+    of a 422; their values are ignored, never trusted. Any other unknown field is
+    still rejected.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    # Legacy fields: accepted and ignored.
+    shop_id: Optional[str] = Field(default=None, max_length=64)
+    technician_id: Optional[str] = Field(default=None, max_length=64)
+    assigned_technician_id: Optional[str] = Field(default=None, max_length=64)
+    status: Optional[str] = Field(default=None, max_length=32)
+
+    vehicle_id: Optional[uuid.UUID] = None
+    vehicle_year: Optional[int] = Field(default=None, ge=1886, le=2100)
+    vehicle_make: Optional[str] = Field(default=None, max_length=100)
+    vehicle_model: Optional[str] = Field(default=None, max_length=100)
+    vehicle_vin: Optional[str] = Field(default=None, max_length=50)
+    vehicle_mileage: Optional[int] = Field(default=None, ge=0, le=2_000_000)
+    checklist_template_id: Optional[uuid.UUID] = None
+    customer_concern: Optional[str] = Field(default=None, max_length=1_000)
 
 
 class FindingCreate(BaseModel):
@@ -188,8 +218,75 @@ def list_sessions(
             | (InspectionSession.assigned_technician_id == technician_id)
         )
     if status_filter:
-        query = query.filter(InspectionSession.status == status_filter)
+        try:
+            wanted_status = SessionStatus(status_filter)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unknown inspection status filter")
+        query = query.filter(InspectionSession.status == wanted_status)
     return [_session_dict(inspection) for inspection in query.order_by(InspectionSession.started_at.desc()).limit(100).all()]
+
+
+def _legacy_guidance_template(db: Session, actor: StaffActor, requested: Optional[uuid.UUID]) -> Optional[uuid.UUID]:
+    """Pick the checklist the voice agent reads for a legacy session, from this shop only."""
+    if requested:
+        template = (
+            db.query(ChecklistTemplate)
+            .filter(ChecklistTemplate.id == requested, ChecklistTemplate.shop_id == actor.shop_id)
+            .one_or_none()
+        )
+        if not template:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That inspection checklist is not available in this shop")
+        return template.id
+    shop_templates = db.query(ChecklistTemplate).filter(ChecklistTemplate.shop_id == actor.shop_id)
+    active = shop_templates.filter(ChecklistTemplate.active_for_new_visits.is_(True)).first()
+    if active:
+        return active.id
+    latest = (
+        shop_templates.filter(ChecklistTemplate.lifecycle_status != TemplateLifecycleStatus.retired)
+        .order_by(ChecklistTemplate.updated_at.desc().nullslast(), ChecklistTemplate.created_at.desc().nullslast())
+        .first()
+    )
+    return latest.id if latest else None
+
+
+@router.post("/sessions", status_code=status.HTTP_201_CREATED)
+def create_legacy_mobile_session(
+    body: LegacyMobileSessionCreate,
+    actor: StaffActor = Depends(require_roles(UserRole.technician)),
+    db: Session = Depends(get_db),
+):
+    """Mobile app: a technician starts their own voice/transcript inspection.
+
+    This is the pre-Check-in "legacy" session. It never carries a template
+    snapshot, so it can never enter advisor review or Current Visit; visits that
+    go through that governed workflow are created only by Check-in. Advisors and
+    admins start visits from Check-in, not here.
+    """
+    if not legacy_mobile_sessions_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    if body.vehicle_id:
+        vehicle = db.query(Vehicle).filter(Vehicle.id == body.vehicle_id, Vehicle.shop_id == actor.shop_id).one_or_none()
+        if not vehicle:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Vehicle is not available in this shop")
+    inspection = InspectionSession(
+        shop_id=actor.shop_id,
+        technician_id=actor.user_id,
+        assigned_technician_id=actor.user_id,
+        vehicle_id=body.vehicle_id,
+        checklist_template_id=_legacy_guidance_template(db, actor, body.checklist_template_id),
+        vehicle_year=str(body.vehicle_year) if body.vehicle_year else None,
+        vehicle_make=body.vehicle_make or None,
+        vehicle_model=body.vehicle_model or None,
+        vehicle_vin=body.vehicle_vin or None,
+        vehicle_mileage=body.vehicle_mileage,
+        customer_concern=body.customer_concern or None,
+        status=SessionStatus.in_progress,
+        started_at=datetime.utcnow(),
+    )
+    db.add(inspection)
+    db.commit()
+    db.refresh(inspection)
+    return _session_dict(inspection)
 
 
 @router.get("/sessions/{session_id}")
@@ -339,6 +436,10 @@ def complete_session(session_id: uuid.UUID, actor: StaffActor = Depends(require_
             status_code=status.HTTP_409_CONFLICT,
             detail="Template-driven inspections must be submitted for advisor review; technician completion is not a customer or repair completion state.",
         )
+    if inspection.status == SessionStatus.completed:
+        # The voice agent's mark_complete and the app's own complete call both
+        # fire at the end of a voice inspection; the second one is a no-op.
+        return _session_dict(inspection)
     if inspection.status != SessionStatus.in_progress:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only active legacy inspections may be completed")
     inspection.status = SessionStatus.completed

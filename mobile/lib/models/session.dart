@@ -8,6 +8,9 @@ class InspectionSession {
   final String? vehicleVin;
   final DateTime? startedAt;
   final DateTime? completedAt;
+  /// Set when the visit was created by Check-in with the shop's controlled
+  /// inspection checklist (a template snapshot); null for the app's own sessions.
+  final int? templateVersion;
 
   InspectionSession({
     required this.id,
@@ -19,6 +22,7 @@ class InspectionSession {
     this.vehicleVin,
     this.startedAt,
     this.completedAt,
+    this.templateVersion,
   });
 
   factory InspectionSession.fromJson(Map<String, dynamic> j) => InspectionSession(
@@ -31,11 +35,13 @@ class InspectionSession {
     vehicleVin: j['vehicle_vin'],
     startedAt: j['started_at'] != null ? DateTime.tryParse(j['started_at']) : null,
     completedAt: j['completed_at'] != null ? DateTime.tryParse(j['completed_at']) : null,
+    templateVersion: j['template_version'] is int ? j['template_version'] as int : null,
   );
 
   bool get isActive => status == 'in_progress';
   bool get isCompleted => status == 'completed';
   bool get isPending => status == 'pending';
+  bool get isTemplateDriven => templateVersion != null;
 
   String get vehicleLabel {
     final parts = [vehicleYear, vehicleMake, vehicleModel].where((p) => p != null && p.isNotEmpty).toList();

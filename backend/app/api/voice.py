@@ -17,6 +17,9 @@ class VoiceSessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: uuid.UUID
     language: str = Field(default="en", min_length=2, max_length=12)
+    # Sent by released mobile builds. Ignored: the LiveKit identity and display
+    # name always come from the authenticated technician.
+    technician_name: str | None = Field(default=None, max_length=200)
 
 
 @router.post("/voice/token")
@@ -32,6 +35,14 @@ def create_voice_token(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inspection is not assigned to this technician")
     if inspection.status != SessionStatus.in_progress:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Start the pending inspection before requesting voice access")
+    if inspection.template_snapshot:
+        # The voice agent records free-form findings, which template-driven
+        # visits reject. Refuse up front instead of running a voice session
+        # whose findings would all be dropped.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This visit uses the shop's inspection checklist; record it in the inspection workspace, not voice mode",
+        )
 
     room_name = f"inspection-{body.session_id}"
     token = (
