@@ -96,7 +96,9 @@ def create_app() -> FastAPI:
     if _enabled("WORKBAI_ENABLE_BILLING"):
         application.include_router(billing.router)
         mounted.append("billing")
-    logging.getLogger("workbay.app").info("Optional routers mounted: %s", ", ".join(mounted) or "none")
+    # uvicorn.error is the logger uvicorn configures at INFO, so this line
+    # reaches `docker compose logs backend` (app loggers default to WARNING).
+    logging.getLogger("uvicorn.error").info("Optional routers mounted: %s", ", ".join(mounted) or "none")
 
     @application.get("/health")
     async def health():
