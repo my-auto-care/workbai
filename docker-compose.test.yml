@@ -1,0 +1,56 @@
+# Use only on the isolated Workbai test runtime. This file deliberately avoids host ports 80/443.
+# The host reverse proxy owns public TLS for test.workbay.autorepairsolutions.ai.
+name: workbai-test
+
+services:
+  migrate:
+    build: ./backend
+    env_file:
+      - ./backend/.env.test
+    restart: "no"
+    command: alembic upgrade head
+
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env.test
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:18000:8000"
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+
+  current-visit-cleanup:
+    build: ./backend
+    env_file:
+      - ./backend/.env.test
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    command: >
+      sh -ec 'while true; do
+      python scripts/prune_current_visit_records.py;
+      touch /tmp/current-visit-cleanup-heartbeat;
+      sleep 300;
+      done'
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/current-visit-cleanup-heartbeat && test $(find /tmp/current-visit-cleanup-heartbeat -mmin -10)"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 2m
+
+  dashboard:
+    build: ./dashboard
+    env_file:
+      - ./dashboard/.env.test
+    environment:
+      WORKBAI_BACKEND_INTERNAL_URL: http://backend:8000
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:13000:3000"
+    restart: unless-stopped

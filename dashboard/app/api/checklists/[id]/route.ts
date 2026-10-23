@@ -1,0 +1,44 @@
+import { NextResponse } from "next/server";
+
+import { BackendRequestError, backendJson } from "@/lib/server-api";
+
+type Context = { params: Promise<{ id: string }> };
+type LifecycleAction = "approve" | "retire";
+
+function failure(error: unknown) {
+  if (error instanceof BackendRequestError) return NextResponse.json({ detail: error.detail }, { status: error.status });
+  return NextResponse.json({ detail: "Checklist service is unavailable" }, { status: 502 });
+}
+
+export async function GET(_: Request, { params }: Context) {
+  try {
+    const { id } = await params;
+    return NextResponse.json(await backendJson(`/checklists/${encodeURIComponent(id)}`));
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function PATCH(request: Request, { params }: Context) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    return NextResponse.json(await backendJson(`/checklists/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function POST(request: Request, { params }: Context) {
+  try {
+    const { id } = await params;
+    const body = (await request.json()) as { action?: LifecycleAction; confirm_controlled_artifact?: boolean; confirm_retirement?: boolean };
+    if (body.action !== "approve" && body.action !== "retire") return NextResponse.json({ detail: "Unsupported checklist lifecycle action" }, { status: 422 });
+    const confirmation = body.action === "approve"
+      ? { confirm_controlled_artifact: body.confirm_controlled_artifact === true }
+      : { confirm_retirement: body.confirm_retirement === true };
+    return NextResponse.json(await backendJson(`/checklists/${encodeURIComponent(id)}/${body.action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(confirmation) }));
+  } catch (error) {
+    return failure(error);
+  }
+}

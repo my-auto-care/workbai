@@ -1,0 +1,68 @@
+.shell { min-height: 100vh; background: #f1ece3; color: #1f3a47; padding: clamp(24px, 4vw, 56px); }
+.topbar, .context, .boundary, .currentVisit, .readinessReasons, .quietResults, .itemList, .completePanel, .empty, .notice, .error { margin-left: auto; margin-right: auto; max-width: 1120px; }
+.topbar { align-items: flex-end; border-bottom: 1px solid #cad7da; display: flex; gap: 24px; justify-content: space-between; padding-bottom: 26px; }
+.eyebrow, .recordLabel, .itemMeta { color: #617a83; font-size: .7rem; font-weight: 800; letter-spacing: .1em; margin: 0; text-transform: uppercase; }
+.topbar h1 { font-size: clamp(2rem, 5vw, 3.2rem); letter-spacing: -.045em; line-height: 1; margin: 7px 0 0; }
+.concern { border-left: 3px solid #e29337; color: #3f5e68; line-height: 1.55; margin: 16px 0 0; max-width: 62ch; padding-left: 13px; }
+.concern span { color: #8a570f; display: block; font-size: .69rem; font-weight: 800; letter-spacing: .1em; margin-bottom: 3px; text-transform: uppercase; }
+.backLink { color: #087e91; flex: 0 0 auto; font-size: .9rem; font-weight: 800; text-decoration: none; }
+.backLink:hover { text-decoration: underline; }
+.context { display: grid; gap: 18px; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 22px 0; }
+.context div { display: grid; gap: 5px; }
+.context span { color: #6d858c; font-size: .69rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.context strong { color: #294a55; font-size: .94rem; }
+.boundary { align-items: baseline; background: #e7f4f4; border-left: 3px solid #087e91; color: #41646c; display: flex; flex-wrap: wrap; font-size: .88rem; gap: 8px 13px; line-height: 1.5; margin-bottom: 20px; padding: 13px 16px; }
+.boundary strong { color: #175f6c; }
+.currentVisit { background: #f8f4eb; border: 1px solid #d9d0bf; border-radius: 16px; display: grid; gap: 14px; margin-bottom: 16px; padding: 20px 22px; }
+.currentVisit h2 { font-size: 1.08rem; letter-spacing: -.018em; margin: 6px 0 0; }
+.currentVisit p:not(.eyebrow) { color: #58717a; font-size: .9rem; line-height: 1.55; margin: 8px 0 0; }
+.currentVisit ul { color: #76534a; font-size: .85rem; line-height: 1.5; margin: 0; padding-left: 18px; }
+.readinessReasons { background: #fdf5e6; border-left: 3px solid #e29337; color: #76534a; font-size: .85rem; line-height: 1.5; margin-bottom: 16px; padding: 12px 16px; }
+.readinessReasons ul { margin: 0; padding-left: 18px; }
+.currentVisitActions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.controlHint, .deliveryHold { color: #60777d; font-size: .84rem; line-height: 1.5; margin: 0; }
+.deliveryHold { border-top: 1px solid #d9e2e0; padding-top: 13px; }
+.deliveryHold strong { color: #385a63; }
+.progressControls { align-items: end; display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 10px; }
+.progressControls label { color: #345560; display: grid; font-size: .78rem; font-weight: 800; gap: 6px; min-width: min(100%, 260px); }
+.progressControls select { appearance: none; background: #fff; border: 1px solid #a7bbc0; border-radius: 9px; color: #1f3a47; font: inherit; font-size: .9rem; min-height: 42px; padding: 9px 12px; }
+.revokeButton { background: transparent; border: 1px solid #c87d75; border-radius: 9px; color: #9a3d36; cursor: pointer; font: inherit; font-size: .84rem; font-weight: 800; min-height: 42px; padding: 9px 13px; }
+.revokeButton:hover:not(:disabled) { background: #fdf0ed; }
+.counterLink { background: #eaf6f4; border: 1px solid #b7dcd6; border-radius: 10px; color: #356067; display: grid; font-size: .84rem; gap: 6px; line-height: 1.45; padding: 14px; }
+.counterLink strong { color: #1f5d63; }
+.counterLink a { color: #087e91; font-weight: 800; width: fit-content; }
+.quietResults, .reviewItem, .empty, .completePanel { background: #fbf8f2; border: 1px solid #d4dedf; border-radius: 16px; box-shadow: 0 14px 36px rgb(26 56 68 / 6%); }
+.quietResults { margin-bottom: 16px; padding: 24px 26px; }
+.quietResults h2, .completePanel h2, .empty h2 { font-size: 1.25rem; letter-spacing: -.022em; margin: 6px 0 0; }
+.quietResults p:not(.eyebrow), .completePanel p:not(.eyebrow), .empty p { color: #58717a; line-height: 1.5; margin: 9px 0 0; }
+.itemList { display: grid; gap: 13px; }
+.reviewItem { overflow: hidden; }
+.itemHeader { align-items: flex-start; display: flex; gap: 18px; justify-content: space-between; padding: 19px 20px 14px; }
+.itemHeader h3 { font-size: 1.04rem; letter-spacing: -.012em; margin: 5px 0 0; }
+.dispositionTag { background: #e5f2f4; border: 1px solid #9ccad0; border-radius: 999px; color: #156876; flex: 0 0 auto; font-size: .72rem; font-weight: 800; padding: 6px 10px; }
+.technicianRecord, .lockedDecision { border-top: 1px solid #e0e8e7; color: #496972; font-size: .9rem; line-height: 1.55; padding: 15px 20px; }
+.technicianRecord { background: #f7f9f8; }
+.technicianRecord p, .lockedDecision p { margin: 5px 0 0; }
+.recordLabel { color: #5c7680 !important; }
+.technicianRecord strong { color: #315661; }
+.decisionForm { border-top: 1px solid #e0e8e7; display: grid; gap: 13px; padding: 17px 20px 20px; }
+.decisionForm label { color: #345560; display: grid; font-size: .8rem; font-weight: 800; gap: 7px; }
+.decisionForm select, .decisionForm textarea { appearance: none; background: #fff; border: 1px solid #a7bbc0; border-radius: 9px; color: #1f3a47; font: inherit; font-size: .92rem; font-weight: 500; min-height: 44px; outline: none; padding: 10px 12px; }
+.decisionForm textarea { min-height: 86px; resize: vertical; }
+.decisionForm select:focus, .decisionForm textarea:focus { border-color: #1fbed4; box-shadow: 0 0 0 4px rgb(31 190 212 / 18%); }
+.saveButton { background: #f3faf9; border: 1px solid #6caeb7; border-radius: 9px; color: #126979; cursor: pointer; font: inherit; font-size: .85rem; font-weight: 800; justify-self: start; min-height: 42px; padding: 9px 13px; }
+.saveButton:hover:not(:disabled) { background: #e0f3f4; border-color: #087e91; }
+.saveButton:disabled { cursor: wait; opacity: .65; }
+.lockedDecision { background: #eef6f0; color: #326347; }
+.unreviewed { color: #a35512; font-size: .9rem; margin: 0; padding: 16px 20px; }
+.completePanel { align-items: center; display: flex; gap: 26px; justify-content: space-between; margin-bottom: 30px; margin-top: 20px; padding: 25px 26px; }
+.completeButton { background: #087e91; border: 0; border-radius: 10px; box-shadow: 0 8px 18px rgb(8 126 145 / 18%); color: #fff; cursor: pointer; flex: 0 0 auto; font: inherit; font-size: .92rem; font-weight: 800; min-height: 48px; padding: 12px 18px; }
+.completeButton:hover:not(:disabled) { background: #046e80; }
+.completeButton:disabled { background: #a3b5b9; box-shadow: none; cursor: not-allowed; }
+.empty { margin-top: 14px; padding: 30px; }
+.notice, .error, .saved { border-radius: 10px; font-size: .88rem; line-height: 1.5; padding: 12px 14px; }
+.notice, .saved { background: #e5f5ea; color: #286a43; }
+.error { background: #fbe4e3; color: #87352f; }
+.notice, .error { margin-top: 18px; }
+.saved, .error { margin: 0; }
+@media (max-width: 700px) { .shell { padding: 22px 16px; } .topbar, .completePanel { align-items: flex-start; flex-direction: column; } .context { grid-template-columns: repeat(2, minmax(0, 1fr)); } .completeButton { width: 100%; } .boundary { align-items: flex-start; flex-direction: column; gap: 4px; } .currentVisitActions, .progressControls { align-items: stretch; flex-direction: column; width: 100%; } .progressControls label { min-width: 0; } .saveButton, .revokeButton { width: 100%; } }

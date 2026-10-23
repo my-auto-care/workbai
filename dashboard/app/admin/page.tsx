@@ -1,98 +1,21 @@
-import Link from 'next/link';
+import Link from "next/link";
 
-const API = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://167.99.153.77';
+import { backendJson } from "@/lib/server-api";
 
-async function getStats() {
+export const dynamic = "force-dynamic";
+
+type SessionSummary = { id: string; status: "pending" | "in_progress" | "completed" | "abandoned"; customer_concern?: string | null; started_at?: string | null };
+type ChecklistSummary = { id: string };
+
+async function getData(): Promise<{ sessions: SessionSummary[]; checklists: ChecklistSummary[] }> {
   try {
-    const [sessions, checklists] = await Promise.all([
-      fetch(`${API}/sessions`, { cache: 'no-store' }).then(r => r.json()),
-      fetch(`${API}/checklists`, { cache: 'no-store' }).then(r => r.json()),
-    ]);
-    const completed = sessions.filter((s: any) => s.status === 'completed').length;
-    const active = sessions.filter((s: any) => s.status === 'in_progress').length;
-    return { total: sessions.length, completed, active, checklists: checklists.length };
-  } catch { return { total: 0, completed: 0, active: 0, checklists: 0 }; }
-}
-
-async function getSessions() {
-  try {
-    const res = await fetch(`${API}/sessions`, { cache: 'no-store' });
-    return res.ok ? res.json() : [];
-  } catch { return []; }
+    const [sessions, checklists] = await Promise.all([backendJson<SessionSummary[]>("/sessions"), backendJson<ChecklistSummary[]>("/checklists")]);
+    return { sessions, checklists };
+  } catch { return { sessions: [], checklists: [] }; }
 }
 
 export default async function AdminPage() {
-  const [stats, sessions] = await Promise.all([getStats(), getSessions()]);
-
-  return (
-    <div className="min-h-screen bg-gray-950 text-white p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold">Admin</h1>
-          <Link href="/" className="text-gray-400 hover:text-white text-sm">Home</Link>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-          {[
-            { label: 'Total Sessions', value: stats.total, color: '' },
-            { label: 'Active', value: stats.active, color: 'text-blue-400' },
-            { label: 'Completed', value: stats.completed, color: 'text-green-400' },
-            { label: 'Checklists', value: stats.checklists, color: '' },
-          ].map(s => (
-            <div key={s.label} className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-              <p className="text-gray-400 text-sm">{s.label}</p>
-              <p className={"text-3xl font-bold mt-1 " + (s.color || 'text-white')}>{s.value}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex gap-3 mb-8">
-          <Link href="/admin/checklists" className="bg-blue-600 hover:bg-blue-700 px-5 py-2.5 rounded-lg text-sm font-medium transition">
-            Manage Checklists
-          </Link>
-          <Link href="/queue" className="bg-gray-700 hover:bg-gray-600 px-5 py-2.5 rounded-lg text-sm font-medium transition">
-            Inspection Queue
-          </Link>
-        </div>
-
-        <h2 className="text-lg font-semibold mb-4">Recent Sessions</h2>
-        {sessions.length === 0 ? (
-          <div className="bg-gray-900 rounded-xl p-8 text-center text-gray-500">No sessions yet</div>
-        ) : (
-          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800 text-gray-400">
-                  <th className="text-left p-4">Session ID</th>
-                  <th className="text-left p-4">Status</th>
-                  <th className="text-left p-4">Concern</th>
-                  <th className="text-left p-4">Started</th>
-                  <th className="p-4"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.slice(0, 20).map((s: any) => (
-                  <tr key={s.id} className="border-b border-gray-800 last:border-0 hover:bg-gray-800/50">
-                    <td className="p-4 font-mono text-gray-300">{s.id.slice(0, 8)}...</td>
-                    <td className="p-4">
-                      <span className={"px-2 py-0.5 rounded-full text-xs font-medium " + (
-                        s.status === 'completed' ? 'bg-green-900 text-green-300' :
-                        s.status === 'in_progress' ? 'bg-blue-900 text-blue-300' :
-                        'bg-gray-700 text-gray-300'
-                      )}>{s.status}</span>
-                    </td>
-                    <td className="p-4 text-gray-400 max-w-xs truncate">{s.customer_concern || '—'}</td>
-                    <td className="p-4 text-gray-400">{s.started_at ? new Date(s.started_at).toLocaleString() : '—'}</td>
-                    <td className="p-4">
-                      <Link href={"/sessions/" + s.id} className="text-blue-400 hover:text-blue-300 text-xs">View</Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  const { sessions, checklists } = await getData();
+  const stats = { total: sessions.length, active: sessions.filter((session) => session.status === "in_progress").length, completed: sessions.filter((session) => session.status === "completed").length, checklists: checklists.length };
+  return <main className="min-h-screen bg-[#f1ece3] p-8 text-[#1f3a47]"><div className="mx-auto max-w-6xl"><header className="mb-8 flex items-end justify-between border-b border-[#cad7da] pb-6"><div><p className="text-xs font-bold uppercase tracking-[.13em] text-[#087e91]">Workbai · administration</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Operations overview</h1></div><Link href="/" className="text-sm font-bold text-[#087e91]">Home</Link></header><section className="grid grid-cols-2 gap-4 md:grid-cols-4">{[{ label: "Inspections", value: stats.total, tone: "text-[#1f3a47]" }, { label: "In progress", value: stats.active, tone: "text-[#087e91]" }, { label: "Completed", value: stats.completed, tone: "text-[#218849]" }, { label: "Templates", value: stats.checklists, tone: "text-[#1f3a47]" }].map((stat) => <article key={stat.label} className="rounded-2xl border border-[#d4dedf] bg-[#fbf8f2] p-5 shadow-sm"><p className="text-sm text-[#58717b]">{stat.label}</p><p className={`mt-1 text-3xl font-semibold ${stat.tone}`}>{stat.value}</p></article>)}</section><div className="mt-8 flex flex-wrap gap-3"><Link href="/check-in" className="rounded-lg bg-[#087e91] px-5 py-3 text-sm font-bold text-white">Start check-in</Link><Link href="/admin/checklists" className="rounded-lg border border-[#9ab0b7] px-5 py-3 text-sm font-bold text-[#264957]">Manage templates</Link><Link href="/admin/current-visit" className="rounded-lg border border-[#78acb3] px-5 py-3 text-sm font-bold text-[#126979]">Current Visit managers</Link><Link href="/queue" className="self-center text-sm font-bold text-[#087e91]">Inspection queue</Link></div><section className="mt-10 overflow-hidden rounded-2xl border border-[#d4dedf] bg-[#fbf8f2] shadow-sm"><div className="border-b border-[#e0e7e6] p-5"><h2 className="font-semibold">Recent inspections</h2></div>{sessions.length === 0 ? <p className="p-8 text-center text-sm text-[#58717b]">No inspections yet.</p> : sessions.slice(0, 20).map((session) => <Link key={session.id} href={`/sessions/${session.id}`} className="flex items-center justify-between gap-4 border-b border-[#e0e7e6] p-5 text-sm last:border-0 hover:bg-[#f3f9f8]"><div><p className="font-mono text-xs text-[#58717b]">{session.id.slice(0, 8)}</p><p className="mt-1 truncate text-[#355462]">{session.customer_concern || "No customer concern recorded"}</p></div><span className="font-bold capitalize text-[#087e91]">{session.status.replace("_", " ")}</span></Link>)}</section></div></main>;
 }

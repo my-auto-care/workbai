@@ -15,8 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session as DBSession
 import uuid
 
+from app.auth import StaffActor, require_roles, scoped_session_or_404
 from app.db.session import get_db
-from app.db.models import InspectionSession, Finding, FindingCondition
+from app.db.models import InspectionSession, Finding, FindingCondition, SessionStatus, UserRole
 
 router = APIRouter()
 logger = logging.getLogger("workbay.transcript")
@@ -89,7 +90,8 @@ async def _upload_to_assemblyai(audio_bytes: bytes, content_type: str) -> str:
     async with httpx.AsyncClient(timeout=60.0) as client:
         r = await client.post(f"{ASSEMBLYAI_BASE}/upload", headers=headers, content=audio_bytes)
         if r.status_code != 200:
-            raise HTTPException(status_code=500, detail=f"AssemblyAI upload failed: {r.text}")
+            logger.error("AssemblyAI upload failed: HTTP %s", r.status_code)
+            raise HTTPException(status_code=502, detail="Transcription service upload failed")
         return r.json()["upload_url"]
 
 
@@ -105,7 +107,8 @@ async def _transcribe_assemblyai(upload_url: str) -> str:
             "disfluencies": False,
         })
         if r.status_code != 200:
-            raise HTTPException(status_code=500, detail=f"AssemblyAI job failed: {r.text}")
+            logger.error("AssemblyAI job creation failed: HTTP %s", r.status_code)
+            raise HTTPException(status_code=502, detail="Transcription service rejected the job")
         job_id = r.json()["id"]
 
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -118,7 +121,8 @@ async def _transcribe_assemblyai(upload_url: str) -> str:
             if status == "completed":
                 return data.get("text", "")
             elif status == "error":
-                raise HTTPException(status_code=500, detail=f"AssemblyAI error: {data.get('error')}")
+                logger.error("AssemblyAI transcription error: %s", data.get("error"))
+                raise HTTPException(status_code=502, detail="Transcription service could not transcribe this audio")
 
     raise HTTPException(status_code=504, detail="Transcription timed out")
 
@@ -173,15 +177,19 @@ async def process_transcript(
     session_id: uuid.UUID,
     audio: UploadFile = File(...),
     photo_markers: str = Form(default=""),
+    actor: StaffActor = Depends(require_roles(UserRole.technician)),
     db: DBSession = Depends(get_db),
 ):
-    session = db.get(InspectionSession, session_id)
-    if not session:
-        from app.db.models import SessionStatus
-        session = InspectionSession(id=session_id, status=SessionStatus.in_progress)
-        db.add(session)
-        db.commit()
-        db.refresh(session)
+    # Only the assigned technician, only their shop's session, only while it is
+    # an active legacy (non-template) inspection. The session is never created
+    # here: an unknown id is a 404, not a new row.
+    session = scoped_session_or_404(db.get(InspectionSession, session_id), actor, require_assigned_technician=True)
+    if session.template_snapshot is not None:
+        raise HTTPException(status_code=409, detail="This visit uses the shop's inspection checklist; record it in the inspection workspace")
+    if session.status != SessionStatus.in_progress:
+        raise HTTPException(status_code=409, detail="Transcripts can only be added to an active inspection")
+    if not ASSEMBLYAI_API_KEY:
+        raise HTTPException(status_code=503, detail="Transcription is not configured")
 
     existing_vehicle = f"{session.vehicle_year or ''} {session.vehicle_make or ''} {session.vehicle_model or ''}".strip() or "Unknown"
     logger.info(f"Processing transcript for session {session_id}, vehicle: {existing_vehicle}")
@@ -194,16 +202,20 @@ async def process_transcript(
     try:
         logger.info("Uploading to AssemblyAI...")
         upload_url = await _upload_to_assemblyai(audio_bytes, content_type)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"AssemblyAI upload failed: {e}")
-        raise HTTPException(status_code=500, detail=f"AssemblyAI upload error: {str(e)}")
+        raise HTTPException(status_code=502, detail="Transcription service upload failed")
 
     try:
         logger.info("Transcribing...")
         raw_transcript = await _transcribe_assemblyai(upload_url)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"AssemblyAI transcription failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Transcription error: {str(e)}")
+        raise HTTPException(status_code=502, detail="Transcription service failed")
     logger.info(f"Raw transcript: {len(raw_transcript)} chars")
 
     if not raw_transcript:

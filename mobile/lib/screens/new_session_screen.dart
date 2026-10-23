@@ -22,10 +22,6 @@ class _NewSessionScreenState extends State<NewSessionScreen> {
   bool _scanning = false;
   String? _error;
 
-  static const String _kShopId       = '00000000-0000-0000-0000-000000000001';
-  static const String _kTechId       = '00000000-0000-0000-0000-000000000002';
-  static const String _kChecklistId  = '1bbf9892-68b8-4842-bfd9-7a4cd53dcca8';
-
   // ── Auto-fill helpers ──────────────────────────────────────────────────
 
   void _fillFromVehicleData(Map<String, dynamic> data) {
@@ -106,14 +102,11 @@ class _NewSessionScreenState extends State<NewSessionScreen> {
       final year    = int.tryParse(_yearCtrl.text.trim());
       final mileage = int.tryParse(_mileageCtrl.text.trim().replaceAll(',', ''));
       final session = await ApiService().createSession(
-        shopId: _kShopId,
-        technicianId: _kTechId,
         vehicleYear:  year,
         vehicleMake:  _makeCtrl.text.trim().isEmpty  ? null : _makeCtrl.text.trim(),
         vehicleModel: _modelCtrl.text.trim().isEmpty ? null : _modelCtrl.text.trim(),
         vehicleVin:   _vinCtrl.text.trim().isEmpty   ? null : _vinCtrl.text.trim(),
         vehicleMileage: mileage,
-        checklistTemplateId: _kChecklistId,
         customerConcern: _concernCtrl.text.trim().isEmpty ? null : _concernCtrl.text.trim(),
       );
       if (mounted) {

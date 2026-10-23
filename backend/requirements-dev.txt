@@ -1,0 +1,2 @@
+# Test-only dependencies. Production images install requirements.txt only.
+pytest==8.3.3

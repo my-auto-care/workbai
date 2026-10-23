@@ -18,8 +18,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = true;
   String? _error;
 
-  static const String _kTechId = '00000000-0000-0000-0000-000000000002';
-
   @override
   void initState() {
     super.initState();
@@ -47,12 +45,31 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _startPending(InspectionSession session) async {
     try {
       await ApiService().startSession(session.id);
-      if (mounted) {
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => InspectionScreen(sessionId: session.id),
-        )).then((_) => _load());
+      if (!mounted) return;
+      if (session.isTemplateDriven) {
+        // Checked-in visits use the shop's inspection checklist, which this
+        // app cannot record yet. Voice mode would save nothing on them.
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Inspection started'),
+            content: const Text(
+              'This visit uses the shop inspection checklist. Record each item in Workbai on the shop computer '
+              '(My inspections), then submit it for advisor review.',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('OK')),
+            ],
+          ),
+        );
+        _load();
+        return;
       }
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => InspectionScreen(sessionId: session.id),
+      )).then((_) => _load());
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }

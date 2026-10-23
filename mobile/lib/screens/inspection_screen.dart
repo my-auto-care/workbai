@@ -36,10 +36,7 @@ class _InspectionScreenState extends State<InspectionScreen> {
 
   Future<void> _connect() async {
     try {
-      final tokenData = await ApiService().getVoiceToken(
-        sessionId: widget.sessionId,
-        technicianName: 'Technician',
-      );
+      final tokenData = await ApiService().getVoiceToken(sessionId: widget.sessionId);
 
       final room = Room();
       _room = room;

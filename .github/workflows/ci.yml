@@ -9,6 +9,23 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Throwaway database for the test run only.
+        image: postgres:16
+        env:
+          POSTGRES_USER: workbai
+          POSTGRES_PASSWORD: workbai
+          POSTGRES_DB: workbai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U workbai -d workbai_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      WORKBAI_TEST_DATABASE_URL: postgresql://workbai:workbai@localhost:5432/workbai_test
     steps:
       - uses: actions/checkout@v4
 
@@ -20,9 +37,9 @@ jobs:
       - name: Install dependencies
         run: |
           cd backend
-          pip install -r requirements.txt
+          pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run tests
         run: |
           cd backend
-          python -m pytest tests/ -v || echo "No tests yet"
+          python -m pytest tests/ -v

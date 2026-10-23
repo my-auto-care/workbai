@@ -2,11 +2,9 @@
 Voice agent tool definitions — called by Claude during inspection sessions.
 These are the tool schemas passed to the LLM and the handler functions.
 """
-import httpx
-import os
 from typing import Optional
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+from app.voice.backend_client import backend_client
 
 # Tool schemas for Claude
 TOOL_DEFINITIONS = [
@@ -89,7 +87,7 @@ async def handle_tool_call(tool_name: str, tool_input: dict, session_state: dict
     """Execute a tool call and return the result as a string."""
     session_id = tool_input.get("session_id") or session_state.get("session_id")
 
-    async with httpx.AsyncClient(base_url=BACKEND_URL, timeout=10.0) as client:
+    async with backend_client(10.0) as client:
 
         if tool_name == "get_checklist":
             r = await client.get(f"/sessions/{session_id}")

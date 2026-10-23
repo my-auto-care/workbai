@@ -1,0 +1,14 @@
+.shell { align-items: center; background: radial-gradient(circle at top, #e5f4f3 0, #f3eee6 46%, #ece7de 100%); box-sizing: border-box; color: #183641; display: flex; min-height: 100vh; padding: 24px 16px; }
+.card { background: rgb(255 253 248 / 96%); border: 1px solid #cfdbda; border-radius: 22px; box-shadow: 0 20px 55px rgb(20 48 58 / 12%); margin: 0 auto; max-width: 520px; padding: clamp(26px, 7vw, 48px); width: 100%; }
+.eyebrow { color: #4f737b; font-size: .7rem; font-weight: 800; letter-spacing: .13em; margin: 0; text-transform: uppercase; }
+.card h1 { font-size: clamp(2rem, 9vw, 3rem); letter-spacing: -.045em; line-height: 1; margin: 10px 0 30px; }
+.status { align-items: flex-start; background: #eaf7f4; border: 1px solid #b9dbd2; border-radius: 14px; display: flex; gap: 12px; padding: 17px; }
+.statusDot { background: #16816a; border-radius: 50%; box-shadow: 0 0 0 4px rgb(22 129 106 / 12%); flex: 0 0 auto; height: 9px; margin-top: 7px; width: 9px; }
+.status p { color: #275a58; font-size: 1rem; font-weight: 650; line-height: 1.45; margin: 0; }
+.statusLabel { color: #4e7877 !important; font-size: .7rem !important; font-weight: 800 !important; letter-spacing: .1em; margin-bottom: 4px !important; text-transform: uppercase; }
+.timestamp, .expiry, .copy { color: #5c737a; font-size: .86rem; line-height: 1.55; margin: 15px 0 0; }
+.notice { border-left: 3px solid #177f90; color: #527078; display: grid; font-size: .85rem; gap: 5px; line-height: 1.55; margin-top: 28px; padding-left: 13px; }
+.notice strong { color: #1c5966; }
+.callAction { align-items: center; background: #087e91; border-radius: 10px; box-shadow: 0 9px 20px rgb(8 126 145 / 20%); color: #fff; display: inline-flex; font-size: .95rem; font-weight: 800; justify-content: center; margin-top: 28px; min-height: 50px; padding: 0 18px; text-decoration: none; }
+.callAction:hover { background: #046e80; }
+@media (max-width: 420px) { .card { border-radius: 18px; padding: 28px 22px; } }

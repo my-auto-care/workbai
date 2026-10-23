@@ -8,12 +8,47 @@ services:
     restart: unless-stopped
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
+  retention-cleanup:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - backend
+    restart: unless-stopped
+    command: >
+      sh -ec 'while true; do
+      python scripts/prune_current_visit_records.py;
+      touch /tmp/retention-cleanup-heartbeat;
+      sleep 300;
+      done'
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/retention-cleanup-heartbeat && test $(find /tmp/retention-cleanup-heartbeat -mmin -10)"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 2m
+
   voice-agent:
     build: ./backend
     env_file:
       - ./backend/.env
+    environment:
+      # The worker calls the API over the Compose network; "localhost" inside
+      # this container is not the API. It authenticates with
+      # WORKBAI_VOICE_AGENT_TOKEN from backend/.env.
+      BACKEND_URL: http://backend:8000
     restart: unless-stopped
     entrypoint: ["python", "-m", "app.voice.agent", "start"]
+
+  dashboard:
+    build: ./dashboard
+    env_file:
+      - ./dashboard/.env
+    environment:
+      WORKBAI_BACKEND_INTERNAL_URL: http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
@@ -25,5 +60,5 @@ services:
       - /etc/ssl/workbay:/etc/ssl/workbay:ro
       - /var/www/certbot:/var/www/certbot:ro
     depends_on:
-      - backend
+      - dashboard
     restart: unless-stopped

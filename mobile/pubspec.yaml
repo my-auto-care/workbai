@@ -1,7 +1,7 @@
 name: workbay
 description: Workbay AI - Hands-free automotive inspection
 publish_to: 'none'
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

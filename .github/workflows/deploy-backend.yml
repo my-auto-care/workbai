@@ -1,24 +1,70 @@
-name: Deploy Backend
+name: Deploy Backend (production)
 
+# Production deploys are deliberate. Merging or pushing to main never deploys.
+# To deploy: GitHub -> Actions -> "Deploy Backend (production)" -> Run workflow,
+# pick the branch (main), and type deploy-production in the confirm box.
+# The job also waits on the "production" environment, so required reviewers
+# configured on that environment must approve before any SSH step runs.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'backend/**'
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type deploy-production to deploy this commit to the production API host"
+        required: true
+        default: ""
+
+concurrency:
+  group: production-backend-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'deploy-production'
     runs-on: ubuntu-latest
+    environment: production
     steps:
-      - uses: actions/checkout@v4
-
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.BACKEND_VPS_IP }}
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
+          envs: DEPLOY_SHA
+          # Not script_stop: it rewrites the script line by line and breaks the
+          # loops below. `set -eu` makes any failing command fail the job.
           script: |
+            set -eu
             cd /root/workbai
-            git pull origin main
-            docker compose up -d --build backend voice-agent
+
+            # Refuse to deploy without the settings the API fails closed on.
+            # Names are checked for a non-empty value; values are never printed.
+            for name in DATABASE_URL AUTH0_DOMAIN AUTH0_API_AUDIENCE WORKBAI_VOICE_AGENT_TOKEN; do
+              if ! grep -Eq "^${name}=.+" backend/.env; then
+                echo "DEPLOY_REFUSED: backend/.env has no value for ${name}"
+                exit 3
+              fi
+            done
+
+            # Deploy exactly the commit this workflow run was started from.
+            git fetch origin main
+            git checkout --detach "${DEPLOY_SHA}"
+            echo "Deploying $(git rev-parse --short HEAD)"
+
+            docker compose build backend voice-agent retention-cleanup
+            # Additive migrations run before the new code starts serving.
+            docker compose run --rm --no-deps backend alembic upgrade head
+            docker compose up -d backend voice-agent retention-cleanup
+
+            for attempt in $(seq 1 30); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/health || true)
+              if [ "$code" = "200" ]; then
+                echo "HEALTH_OK after ${attempt} attempt(s)"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "HEALTH_FAILED: /health did not return 200 (last status ${code})"
+            docker compose logs --tail 80 backend
+            exit 4
