@@ -208,7 +208,12 @@ def _template_snapshot_or_409(inspection: InspectionSession) -> tuple[dict, dict
 
 
 def expire_stale_sessions(db: Session) -> dict:
-    """Scheduler-only helper: expire active, unsubmitted sessions older than 24 hours."""
+    """Scheduler-only helper: abandon in_progress sessions started more than 24 hours ago.
+
+    started_at is reset when a pending (checked-in) visit is started, so the
+    clock runs from the technician's start, not from check-in. Pending visits
+    nobody has started are not expired by this job.
+    """
     cutoff = datetime.utcnow() - timedelta(hours=24)
     stale = db.query(InspectionSession).filter(
         InspectionSession.status == SessionStatus.in_progress,
@@ -374,6 +379,9 @@ def start_session(session_id: uuid.UUID, actor: StaffActor = Depends(require_rol
     if inspection.status != SessionStatus.pending:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only pending inspections may be started")
     inspection.status = SessionStatus.in_progress
+    # Until now started_at held the check-in time. The 24-hour abandon timer
+    # (expire_stale_sessions) runs from when the technician actually starts.
+    inspection.started_at = datetime.utcnow()
     db.commit()
     db.refresh(inspection)
     return _session_dict(inspection)
