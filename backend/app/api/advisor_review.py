@@ -127,7 +127,8 @@ def _current_visit_readiness(inspection: InspectionSession, db: Session) -> dict
     if template is None:
         reasons.append("template_record_missing")
     elif (
-        template.is_provisional
+        template.shop_id != inspection.shop_id
+        or template.is_provisional
         or template.lifecycle_status not in {TemplateLifecycleStatus.approved, TemplateLifecycleStatus.retired}
         or template.source_reference != inspection.template_source_reference
         or template.source_sha256 != inspection.template_source_sha256

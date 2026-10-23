@@ -1,8 +1,9 @@
 """Admin-controlled inspection template lifecycle.
 
-Templates remain server-owned configuration. A draft may be edited, but an approved
-non-provisional template is immutable and can be the single active selection for
-new Check-in sessions. Retired templates remain readable for historical snapshots.
+Templates are shop-owned configuration: every read and write is limited to the
+caller's shop. A draft may be edited, but an approved non-provisional template is
+immutable and can be the shop's single active selection for new Check-in sessions.
+Retired templates remain readable for historical snapshots.
 """
 
 from __future__ import annotations
@@ -83,8 +84,9 @@ def _validate_source(source_reference: str | None, source_sha256: str | None) ->
         raise ValueError("A lowercase 64-character SHA-256 artifact hash is required for a non-provisional template")
 
 
-def _template_or_404(checklist_id: uuid.UUID, db: Session, *, lock_for_update: bool = False) -> ChecklistTemplate:
-    query = db.query(ChecklistTemplate).filter(ChecklistTemplate.id == checklist_id)
+def _template_or_404(checklist_id: uuid.UUID, db: Session, actor: StaffActor, *, lock_for_update: bool = False) -> ChecklistTemplate:
+    # Templates are shop-owned: another shop's template is indistinguishable from a missing one.
+    query = db.query(ChecklistTemplate).filter(ChecklistTemplate.id == checklist_id, ChecklistTemplate.shop_id == actor.shop_id)
     if lock_for_update:
         query = query.with_for_update()
     template = query.one_or_none()
@@ -120,13 +122,18 @@ def _detail(template: ChecklistTemplate) -> dict:
 
 @router.get("/checklists")
 def list_checklists(actor: StaffActor = Depends(_ADMIN), db: Session = Depends(get_db)):
-    templates = db.query(ChecklistTemplate).order_by(ChecklistTemplate.updated_at.desc(), ChecklistTemplate.name.asc()).all()
+    templates = (
+        db.query(ChecklistTemplate)
+        .filter(ChecklistTemplate.shop_id == actor.shop_id)
+        .order_by(ChecklistTemplate.updated_at.desc(), ChecklistTemplate.name.asc())
+        .all()
+    )
     return [_summary(template) for template in templates]
 
 
 @router.get("/checklists/{checklist_id}")
 def get_checklist(checklist_id: uuid.UUID, actor: StaffActor = Depends(_ADMIN), db: Session = Depends(get_db)):
-    return _detail(_template_or_404(checklist_id, db))
+    return _detail(_template_or_404(checklist_id, db, actor))
 
 
 @router.post("/checklists", status_code=status.HTTP_201_CREATED)
@@ -136,6 +143,7 @@ def create_checklist(
     db: Session = Depends(get_db),
 ):
     template = ChecklistTemplate(
+        shop_id=actor.shop_id,
         name=body.name,
         vehicle_filter=body.vehicle_filter,
         items=body.items.storage_dict(),
@@ -159,7 +167,7 @@ def update_checklist(
     actor: StaffActor = Depends(_ADMIN),
     db: Session = Depends(get_db),
 ):
-    template = _template_or_404(checklist_id, db, lock_for_update=True)
+    template = _template_or_404(checklist_id, db, actor, lock_for_update=True)
     if template.lifecycle_status != TemplateLifecycleStatus.draft:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Approved and retired templates are immutable; create a new draft for changes")
 
@@ -199,9 +207,16 @@ def approve_checklist(
     actor: StaffActor = Depends(_ADMIN),
     db: Session = Depends(get_db),
 ):
-    # Lock the whole small template registry while rotating the single active
+    # Lock this shop's template registry while rotating its single active
     # selection. This prevents two concurrent approvals from both claiming active.
-    templates = db.query(ChecklistTemplate).with_for_update().order_by(ChecklistTemplate.created_at.asc()).all()
+    # Other shops' templates are never read, locked or deactivated here.
+    templates = (
+        db.query(ChecklistTemplate)
+        .filter(ChecklistTemplate.shop_id == actor.shop_id)
+        .with_for_update()
+        .order_by(ChecklistTemplate.created_at.asc())
+        .all()
+    )
     template = next((candidate for candidate in templates if candidate.id == checklist_id), None)
     if template is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Checklist not found")
@@ -239,7 +254,7 @@ def retire_checklist(
     actor: StaffActor = Depends(_ADMIN),
     db: Session = Depends(get_db),
 ):
-    template = _template_or_404(checklist_id, db, lock_for_update=True)
+    template = _template_or_404(checklist_id, db, actor, lock_for_update=True)
     if template.lifecycle_status == TemplateLifecycleStatus.retired:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This template is already retired")
     template.lifecycle_status = TemplateLifecycleStatus.retired

@@ -365,7 +365,7 @@ def _context_prompt_or_422(db: Session, record_id: uuid.UUID, actor: StaffActor,
 @router.get("/options")
 def checkin_options(actor: StaffActor = Depends(_ADVISOR_OR_ADMIN), db: Session = Depends(get_db)):
     technicians = db.query(User).filter(User.shop_id == actor.shop_id, User.active.is_(True), User.role == UserRole.technician).order_by(User.name.asc()).all()
-    templates = db.query(ChecklistTemplate).filter(ChecklistTemplate.lifecycle_status == TemplateLifecycleStatus.approved, ChecklistTemplate.is_provisional.is_(False), ChecklistTemplate.active_for_new_visits.is_(True)).order_by(ChecklistTemplate.name.asc(), ChecklistTemplate.version.desc()).all()
+    templates = db.query(ChecklistTemplate).filter(ChecklistTemplate.shop_id == actor.shop_id, ChecklistTemplate.lifecycle_status == TemplateLifecycleStatus.approved, ChecklistTemplate.is_provisional.is_(False), ChecklistTemplate.active_for_new_visits.is_(True)).order_by(ChecklistTemplate.name.asc(), ChecklistTemplate.version.desc()).all()
     return {
         "actor": {"name": actor.name, "role": actor.role.value, "shop_id": str(actor.shop_id)},
         "technicians": [{"id": str(user.id), "name": user.name} for user in technicians],
@@ -519,7 +519,8 @@ def create_pending_session(body: CheckinCreate, actor: StaffActor = Depends(_ADV
     technician = db.query(User).filter(User.id == body.assigned_technician_id, User.shop_id == actor.shop_id, User.active.is_(True), User.role == UserRole.technician).one_or_none()
     if not technician:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Select an active technician in this shop")
-    templates = db.query(ChecklistTemplate).with_for_update().filter(ChecklistTemplate.lifecycle_status == TemplateLifecycleStatus.approved, ChecklistTemplate.is_provisional.is_(False), ChecklistTemplate.active_for_new_visits.is_(True)).all()
+    # The shop's own single active approved template; never another shop's.
+    templates = db.query(ChecklistTemplate).with_for_update().filter(ChecklistTemplate.shop_id == actor.shop_id, ChecklistTemplate.lifecycle_status == TemplateLifecycleStatus.approved, ChecklistTemplate.is_provisional.is_(False), ChecklistTemplate.active_for_new_visits.is_(True)).all()
     if len(templates) != 1:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A single active approved inspection template is required before a new visit can be started")
     template = templates[0]

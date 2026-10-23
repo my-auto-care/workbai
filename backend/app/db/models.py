@@ -325,6 +325,9 @@ class IntakeReasonSuggestionSelection(Base):
 class ChecklistTemplate(Base):
     __tablename__ = "checklist_templates"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Owning shop. Nullable only so the additive migration can backfill; every
+    # API path sets it and filters on it. A NULL-shop row is visible to no one.
+    shop_id = Column(UUID(as_uuid=True), ForeignKey("shops.id"), nullable=True, index=True)
     name = Column(Text, nullable=False)
     vehicle_filter = Column(JSONB, default={})
     version = Column(Integer, default=1)
