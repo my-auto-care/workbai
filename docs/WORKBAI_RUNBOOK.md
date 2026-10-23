@@ -30,6 +30,24 @@ Verify:
 ssh root@167.99.153.77 'docker ps --format "{{.Names}}\t{{.Status}}"'
 ```
 
+## Production API deploy (manual, gated)
+
+Merging to `main` does **not** deploy. Deploy from GitHub: Actions → **Deploy
+Backend (production)** → Run workflow on `main`, type `deploy-production`. The job
+runs in the `production` environment (add required reviewers there) and:
+
+1. refuses (exit 3) unless `backend/.env` on the host has values for
+   `DATABASE_URL`, `AUTH0_DOMAIN`, `AUTH0_API_AUDIENCE`, `WORKBAI_VOICE_AGENT_TOKEN`;
+2. checks out the exact commit the run started from;
+3. builds `backend`, `voice-agent`, `retention-cleanup`;
+4. runs `alembic upgrade head` (additive migrations) **before** starting new code;
+5. starts those three services and fails (exit 4) unless `/health` returns 200.
+
+Before the first deploy of the Auth0-protected API: take a database backup, seed a
+`users` row (shop, role, `auth0_id` = the person's Auth0 `sub`) for every staff
+member, and ship the mobile release that signs in with the API audience — the
+older "Sign In (Dev)" build cannot authenticate against this API.
+
 ## Deploy (typical)
 
 On orchestrator after `git pull` in `~/workbai`:

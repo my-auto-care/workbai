@@ -19,9 +19,9 @@ The dashboard uses a restrained mechanic-confident visual system: cream canvas, 
 
 ## Intentional exclusions
 
-This Phase 1 build does **not** store customer name, phone, customer portal identity, Digital Glovebox links, DVIPlus records, plate images, consent receipts, or vehicle-specific AI recommendations. It also does not freeze the final inspection sheet. Until their legal/data and cross-product contracts are approved, these are separate build gates rather than placeholder behavior. The test runtime does not register billing, voice-inspection, plate/VIN lookup, transcript processing, or experimental vehicle-AI routes; they are explicitly disabled by default rather than exposed half-finished.
+This Phase 1 build does **not** store customer name, phone, customer portal identity, Digital Glovebox links, DVIPlus records, plate images, consent receipts, or vehicle-specific AI recommendations. It also does not freeze the final inspection sheet. Until their legal/data and cross-product contracts are approved, these are separate build gates rather than placeholder behavior. The isolated test runtime sets the billing, voice-inspection, plate/VIN lookup and vehicle-AI/transcript router flags to `false`. Production keeps them mounted (the flags default on when unset) because the released mobile app, the voice worker and Stripe use them; every route in them requires staff Auth0, the voice worker's service credential, or a verified Stripe signature.
 
-The UI therefore uses confirmed manual vehicle entry. Plate/VIN scanning will be a later explicit-consent, transient-processing flow with manual fallback. Checklists are available shared templates in this Phase 1 data model; active/retired, shop-owned template governance is a later migration rather than a claim the UI cannot support.
+The UI therefore uses confirmed manual vehicle entry. Plate/VIN scanning will be a later explicit-consent, transient-processing flow with manual fallback. Checklist templates are shop-owned (migration `c9d0e1f2a3b4`): each shop sees, edits and activates only its own templates.
 
 ## Phase 1.1: technician inspection workspace
 
@@ -37,7 +37,7 @@ This state is an internal review record—not a diagnosis, estimate, customer DV
 
 ## Phase 1.3: Controlled Template Governance
 
-New Check-in sessions must use exactly one active **approved**, non-provisional inspection template. A draft stays editable; an approved template is immutable to preserve the snapshot contract; a retired template is unavailable for new visits but remains readable for historical inspection records. Approving a template requires a named source reference, SHA-256 artifact hash, a recorded administrator, and an explicit no-longer-provisional declaration. The exact inspection-sheet artifact is still unavailable in this build, so no bundled template may be marked approved or made active.
+New Check-in sessions must use the shop's one active **approved**, non-provisional inspection template. A draft stays editable; an approved template is immutable to preserve the snapshot contract; a retired template is unavailable for new visits but remains readable for historical inspection records. Approving a template requires a named source reference, SHA-256 artifact hash, a recorded administrator, and an explicit no-longer-provisional declaration. The exact inspection-sheet artifact is still unavailable in this build, so no bundled template may be marked approved or made active.
 
 This is template governance only. It does not digitize or infer the unverified sheet’s rows, torque values, field locations, thresholds, layout, vehicle logic, or evidence policy. It does not release a customer view, send an invitation, enable a camera scan, or authorize AI diagnosis.
 

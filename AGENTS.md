@@ -45,6 +45,15 @@ Voice agent (optional): `python -m app.voice.agent start` in `backend/` with Liv
 
 - Dashboard: `cd dashboard && npm run lint` (pre-existing `any` lint errors in admin pages)
 - Backend: `curl http://localhost:8000/health`
+- Backend tests (pytest, no network; needs a throwaway Postgres whose DB name ends in `_test` — the suite drops its schema):
+
+  ```bash
+  docker run -d --rm --name workbai-testpg -e POSTGRES_USER=workbai -e POSTGRES_PASSWORD=workbai \
+    -e POSTGRES_DB=workbai_test -p 127.0.0.1:55432:5432 --tmpfs /var/lib/postgresql/data postgres:16
+  cd backend && pip install -r requirements.txt -r requirements-dev.txt
+  WORKBAI_TEST_DATABASE_URL=postgresql://workbai:workbai@127.0.0.1:55432/workbai_test python -m pytest
+  docker rm -f -v workbai-testpg
+  ```
 
 ### Secrets
 

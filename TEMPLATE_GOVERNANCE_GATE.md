@@ -11,6 +11,6 @@ Before any template can become active for new Check-in sessions, an authorized a
 3. A non-provisional declaration and named approving administrator.
 4. An explicit approval action in Workbai.
 
-Workbai permits only one active approved non-provisional template for new Check-in sessions. The server, not the browser, selects and locks that record for a new visit, then stores its content snapshot and recorded provenance with the inspection session.
+Templates are shop-owned. Each shop has at most one active approved non-provisional template for new Check-in sessions; approving, editing or retiring a template never affects another shop. The server, not the browser, selects and locks that record for a new visit, then stores its content snapshot and recorded provenance with the inspection session.
 
 The available email evidence confirms that the inspection sheet exists and that torque-spec verification is required, but the attachment/PDF itself was not retrievable. This build therefore adds governance mechanics only. It does not infer sheet fields, torque values, thresholds, locations, layout, vehicle applicability, or evidence policy.
