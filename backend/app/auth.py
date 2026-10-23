@@ -27,8 +27,12 @@ from app.db.session import get_db
 
 _bearer = HTTPBearer(auto_error=False)
 _jwks_lock = threading.Lock()
-_jwks_cache: dict[str, object] = {"expires_at": 0.0, "keys": {}}
+_jwks_cache: dict[str, object] = {"expires_at": 0.0, "keys": {}, "fetched_at": None}
 _JWKS_TTL_SECONDS = 3600
+# An unknown "kid" (e.g. right after Auth0 rotates keys) may force a refetch,
+# but at most this often. Without the limit any caller could make every
+# request hit Auth0's JWKS endpoint.
+_JWKS_MIN_REFRESH_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -66,46 +70,69 @@ def _issuer() -> str:
     return f"https://{_domain()}/"
 
 
-def _jwks() -> dict[str, dict]:
+def _fetch_jwks() -> dict[str, dict]:
+    response = httpx.get(f"{_issuer()}.well-known/jwks.json", timeout=5.0)
+    response.raise_for_status()
+    return {
+        key["kid"]: key
+        for key in response.json().get("keys", [])
+        if isinstance(key, dict) and isinstance(key.get("kid"), str) and key["kid"]
+    }
+
+
+def _jwks(*, force_refresh: bool = False) -> dict[str, dict]:
+    """Auth0 signing keys, cached for an hour; a forced refresh is rate-limited.
+
+    If Auth0 is unreachable, the last good key set keeps being used rather than
+    failing every sign-in.
+    """
     now = time.monotonic()
     cached = _jwks_cache["keys"]
-    if isinstance(cached, dict) and now < float(_jwks_cache["expires_at"]):
+    if cached and not force_refresh and now < float(_jwks_cache["expires_at"]):
         return cached
 
     with _jwks_lock:
         cached = _jwks_cache["keys"]
-        if isinstance(cached, dict) and now < float(_jwks_cache["expires_at"]):
+        fetched_at = _jwks_cache["fetched_at"]
+        if cached and not force_refresh and now < float(_jwks_cache["expires_at"]):
+            return cached
+        if cached and force_refresh and fetched_at is not None and now - float(fetched_at) < _JWKS_MIN_REFRESH_SECONDS:
             return cached
         try:
-            response = httpx.get(f"{_issuer()}.well-known/jwks.json", timeout=5.0)
-            response.raise_for_status()
-            keys = {key["kid"]: key for key in response.json().get("keys", []) if key.get("kid")}
-        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            keys = _fetch_jwks()
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            if cached:
+                return cached
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Authentication key service is unavailable",
             ) from exc
         if not keys:
+            if cached:
+                return cached
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Authentication key service returned no usable keys",
             )
         _jwks_cache["keys"] = keys
         _jwks_cache["expires_at"] = now + _JWKS_TTL_SECONDS
+        _jwks_cache["fetched_at"] = now
         return keys
 
 
 def _claims(token: str) -> dict:
     try:
-        kid = jwt.get_unverified_header(token).get("kid")
+        header = jwt.get_unverified_header(token)
     except InvalidTokenError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid access token") from exc
+    kid = header.get("kid") if isinstance(header, dict) else None
+    if not isinstance(kid, str) or not kid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid access token")
 
     jwk = _jwks().get(kid)
     if not jwk:
-        # Rotate once before rejecting a token signed by a recently issued key.
-        _jwks_cache["expires_at"] = 0.0
-        jwk = _jwks().get(kid)
+        # Possibly a freshly rotated key: refetch (rate-limited) before rejecting.
+        jwk = _jwks(force_refresh=True).get(kid)
     if not jwk:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unknown access token key")
 
@@ -117,6 +144,7 @@ def _claims(token: str) -> dict:
             algorithms=["RS256"],
             audience=_audience(),
             issuer=_issuer(),
+            options={"require": ["exp", "iss", "aud", "sub"]},
         )
     except InvalidTokenError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired access token") from exc
