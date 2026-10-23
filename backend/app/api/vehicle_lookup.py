@@ -6,8 +6,10 @@ Endpoints:
   POST /vehicle/ocr-vin            — photo of VIN tag → VDB VIN OCR → full decode
   POST /vehicle/decode-vin         — VIN → full decode + recalls + maintenance + repairs + warranty
   GET  /vehicle/recalls/{vin}      — recalls by VIN
+  POST /vehicle/identify-plate     — check-in: plate photo or typed plate + state → VIN → year/make/model (lean)
 """
 import os
+import re
 import logging
 import asyncio
 import httpx
@@ -286,6 +288,68 @@ async def lookup_plate_vin(
 
     full = await decode_vin_full(vin)
     return {"plate": plate, "confidence": plate_result["confidence"], **full}
+
+
+# ── Check-in: identify a vehicle from its plate (lean) ────────────────────
+# Chad, 2026-10-22: "a license plate scan tied to the vehicle database api". One plate read (skipped for a typed plate),
+# one plate-to-VIN, one VIN decode: the recalls/maintenance/repairs/warranty calls of /vehicle/lookup-plate-vin are paid
+# calls check-in does not need. The photo is never stored, and provider error text never reaches the client.
+
+US_STATES = frozenset("AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY "
+                      "NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split())
+PLATE_RE = re.compile(r"^[A-Z0-9]{2,8}$")
+MAX_PLATE_IMAGE_BYTES = 8 * 1024 * 1024
+
+
+def normalize_plate(raw: Optional[str]) -> str:
+    """A typed plate as the DMV prints it: letters and digits only, upper case (spaces and dashes dropped)."""
+    return re.sub(r"[^A-Za-z0-9]", "", raw or "").upper()
+
+
+@router.post("/vehicle/identify-plate")
+async def identify_plate(
+    state: str = Form(...),
+    image: Optional[UploadFile] = File(default=None),
+    plate: Optional[str] = Form(default=None),
+):
+    """A plate photo (or the plate typed in) and its state → plate, VIN, year, make, model, trim. Staff only."""
+    st = (state or "").strip().upper()
+    if st not in US_STATES:
+        raise HTTPException(status_code=422, detail="Choose the state on the plate.")
+    if not VDB_KEY:
+        raise HTTPException(status_code=503, detail="The vehicle database is not configured.")
+    confidence = None
+    if image is not None and (image.filename or image.size):
+        if image.content_type and not image.content_type.startswith("image/"):
+            raise HTTPException(status_code=415, detail="Send a photo of the plate.")
+        data = await image.read(MAX_PLATE_IMAGE_BYTES + 1)
+        if len(data) > MAX_PLATE_IMAGE_BYTES:
+            raise HTTPException(status_code=413, detail="That photo is too large. Try again closer to the plate.")
+        try:
+            read = await _ocr_plate(data, image.filename or "plate.jpg", f"us-{st.lower()}")
+        except HTTPException as exc:
+            if exc.status_code == 422:
+                raise HTTPException(status_code=422, detail="No plate found in that photo. Try again, or type the plate.") from exc
+            logger.warning("Plate read failed: %s", exc.status_code)
+            raise HTTPException(status_code=502, detail="The plate reader is unavailable. Type the plate instead.") from exc
+        found = normalize_plate(read["plate"])
+        confidence = read.get("confidence")
+    else:
+        found = normalize_plate(plate)
+    if not PLATE_RE.match(found):
+        raise HTTPException(status_code=422, detail="Type the plate as letters and numbers (2 to 8).")
+    try:
+        vin = await _vdb_plate_to_vin(found, st)
+    except httpx.HTTPError as exc:
+        logger.warning("Plate-to-VIN request failed: %s", type(exc).__name__)
+        vin = None
+    if not vin:
+        return {"plate": found, "state": st, "confidence": confidence, "vin": None,
+                "message": f"Plate {found} ({st}) wasn't found in the vehicle database. Enter the vehicle by hand."}
+    vehicle = await _vdb_decode_vin(vin)
+    return {"plate": found, "state": st, "confidence": confidence, "vin": vin.upper(),
+            "year": vehicle.get("year"), "make": vehicle.get("make"), "model": vehicle.get("model"),
+            "trim": vehicle.get("trim"), "engine": vehicle.get("engine_description"), "source": vehicle.get("source")}
 
 
 @router.post("/vehicle/ocr-vin")
