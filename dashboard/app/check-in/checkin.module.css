@@ -98,6 +98,10 @@
 .gridThree, .gridTwo { display: grid; gap: 16px; }
 .gridThree { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .gridTwo { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
+/* Year, make and model on one line, also on a phone (Chad, 2026-10-22: "year, make, model can be combined"). */
+.vehicleRow { display: grid; gap: 16px; grid-template-columns: minmax(5.5rem, 0.7fr) minmax(0, 1fr) minmax(0, 1.3fr); }
+.vehicleRow label { min-width: 0; }
+.vehicleRow input { box-sizing: border-box; min-width: 0; width: 100%; }
 
 .arrivalChoices { border: 0; display: grid; gap: 10px; margin: 0; padding: 0; }
 .arrivalChoices legend { color: #355462; font-size: 0.82rem; font-weight: 750; margin-bottom: 10px; padding: 0; }
@@ -220,6 +224,8 @@
   .operator { padding: 7px 11px; }
   .context { gap: 18px; padding: 18px 0 25px; }
   .gridThree, .gridTwo { grid-template-columns: 1fr; }
+  .vehicleRow { gap: 10px; grid-template-columns: 5.2rem minmax(0, 1fr) minmax(0, 1.25fr); }
+  .vehicleRow input { padding-left: 12px; padding-right: 10px; }
   .section { border-radius: 14px; padding: 22px 18px; }
   .sectionHead { gap: 12px; }
   .lookupResult { align-items: flex-start; flex-direction: column; gap: 6px; }
