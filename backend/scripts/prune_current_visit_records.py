@@ -7,6 +7,11 @@ from __future__ import annotations
 
 import logging
 import sys
+from pathlib import Path
+
+# Run as `python scripts/<name>.py` from the backend directory (the Compose
+# worker does): Python then puts scripts/, not the backend root, on sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.api.checkin import prune_expired_customer_context_records
 from app.api.current_visit import prune_expired_current_visit_records

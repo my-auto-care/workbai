@@ -106,7 +106,9 @@ def public_access_hmac(value: str) -> str:
 
 def valid_public_resolver_key(value: str | None) -> bool:
     expected = _required("WORKBAI_PUBLIC_RESOLVER_SHARED_SECRET")
-    return bool(value) and hmac.compare_digest(value, expected)
+    # Compare bytes: compare_digest raises TypeError on a non-ASCII str, which
+    # turned a junk header into a 500 instead of the generic unavailable reply.
+    return bool(value) and hmac.compare_digest(value.encode("utf-8"), expected.encode("utf-8"))
 
 
 def new_public_secret() -> str:

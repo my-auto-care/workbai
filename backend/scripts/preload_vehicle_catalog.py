@@ -12,6 +12,12 @@ from __future__ import annotations
 
 import argparse
 import time
+import sys
+from pathlib import Path
+
+# Run as `python scripts/<name>.py` from the backend directory: Python then
+# puts scripts/, not the backend root, on sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from datetime import datetime
 from urllib.parse import quote
 
