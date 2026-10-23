@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import advisor_review, billing, checkin, checklists, current_visit, media, sessions, transcript_processor, vehicle_intel, vehicle_lookup, voice
 from app.db.session import SessionLocal
+from app.features import feature_enabled
 
 logger = logging.getLogger("workbay.scheduler")
 EXPIRY_INTERVAL_HOURS = 6
@@ -19,8 +20,21 @@ def _cors_origins() -> list[str]:
     return [value.strip().rstrip("/") for value in configured.split(",") if value.strip()]
 
 
+# Routers production already serves to the mobile app, the voice worker and
+# Stripe. Every route in them now requires staff Auth0, the voice-agent service
+# credential or (webhook) a valid Stripe signature, so they default ON: an
+# unset variable keeps today's behaviour. Set one to "false" to unmount it
+# (the test stack does this explicitly).
+OPTIONAL_ROUTER_FLAGS = (
+    "WORKBAI_ENABLE_VOICE_INSPECTION",
+    "WORKBAI_ENABLE_VEHICLE_LOOKUP",
+    "WORKBAI_ENABLE_EXPERIMENTAL_VEHICLE_AI",
+    "WORKBAI_ENABLE_BILLING",
+)
+
+
 def _enabled(name: str) -> bool:
-    return os.getenv(name, "false").strip().lower() in {"1", "true", "yes"}
+    return feature_enabled(name, True)
 
 
 async def _expiry_loop():
@@ -52,32 +66,43 @@ async def lifespan(app: FastAPI):
     logger.info("Session auto-expiry background task cancelled.")
 
 
-app = FastAPI(title="Workbay AI", version="0.3.0", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins(),
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Workbai-Scheduler-Secret"],
-)
+def create_app() -> FastAPI:
+    application = FastAPI(title="Workbay AI", version="0.3.0", lifespan=lifespan)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins(),
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Workbai-Scheduler-Secret"],
+    )
 
-app.include_router(sessions.router, tags=["sessions"])
-app.include_router(checkin.router)
-app.include_router(advisor_review.router)
-app.include_router(current_visit.router)
-app.include_router(checklists.router, tags=["checklists"])
-app.include_router(media.router, tags=["media"])
-if _enabled("WORKBAI_ENABLE_VOICE_INSPECTION"):
-    app.include_router(voice.router, tags=["voice"])
-if _enabled("WORKBAI_ENABLE_VEHICLE_LOOKUP"):
-    app.include_router(vehicle_lookup.router, tags=["vehicle-lookup"])
-if _enabled("WORKBAI_ENABLE_EXPERIMENTAL_VEHICLE_AI"):
-    app.include_router(vehicle_intel.router, tags=["vehicle-intelligence"])
-    app.include_router(transcript_processor.router, tags=["transcript"])
-if _enabled("WORKBAI_ENABLE_BILLING"):
-    app.include_router(billing.router)
+    application.include_router(sessions.router, tags=["sessions"])
+    application.include_router(checkin.router)
+    application.include_router(advisor_review.router)
+    application.include_router(current_visit.router)
+    application.include_router(checklists.router, tags=["checklists"])
+    application.include_router(media.router, tags=["media"])
+    mounted = []
+    if _enabled("WORKBAI_ENABLE_VOICE_INSPECTION"):
+        application.include_router(voice.router, tags=["voice"])
+        mounted.append("voice")
+    if _enabled("WORKBAI_ENABLE_VEHICLE_LOOKUP"):
+        application.include_router(vehicle_lookup.router, tags=["vehicle-lookup"])
+        mounted.append("vehicle-lookup")
+    if _enabled("WORKBAI_ENABLE_EXPERIMENTAL_VEHICLE_AI"):
+        application.include_router(vehicle_intel.router, tags=["vehicle-intelligence"])
+        application.include_router(transcript_processor.router, tags=["transcript"])
+        mounted.append("vehicle-intelligence+transcript")
+    if _enabled("WORKBAI_ENABLE_BILLING"):
+        application.include_router(billing.router)
+        mounted.append("billing")
+    logging.getLogger("workbay.app").info("Optional routers mounted: %s", ", ".join(mounted) or "none")
+
+    @application.get("/health")
+    async def health():
+        return {"status": "ok", "service": "workbay-backend", "version": "0.3.0"}
+
+    return application
 
 
-@app.get("/health")
-async def health():
-    return {"status": "ok", "service": "workbay-backend", "version": "0.3.0"}
+app = create_app()

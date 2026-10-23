@@ -3,14 +3,22 @@ Stripe subscription billing endpoints for Workbay AI.
 
 Endpoints
 ---------
+Access
+------
+Every route except the webhook requires an Auth0 staff token for a shop
+**admin**, and acts only on that admin's own shop. A ``shop_id`` in a body or
+path must equal the caller's shop (it is never used to pick another shop).
+The webhook is authenticated by Stripe's signature (STRIPE_WEBHOOK_SECRET);
+unsigned or badly signed events are rejected before any data is read.
+
 POST /billing/create-customer
-    Creates a Stripe Customer for a shop.
-    Body: { "shop_id": "<uuid>", "email": "...", "name": "..." }
+    Creates a Stripe Customer for the caller's shop.
+    Body: { "email": "...", "name": "..." }  (legacy "shop_id" must match)
     Returns: { "customer_id": "cus_..." }
 
 POST /billing/create-subscription
-    Creates a Stripe Subscription for an existing customer.
-    Body: { "shop_id": "<uuid>", "customer_id": "cus_...", "price_id": "price_..." }
+    Creates a Stripe Subscription for the shop's own Stripe customer.
+    Body: { "price_id": "price_..." }  (legacy "shop_id"/"customer_id" must match)
     Returns: { "subscription_id": "sub_...", "status": "..." }
 
 POST /billing/webhook
@@ -36,8 +44,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth import StaffActor, require_roles
 from app.db.session import get_db
-from app.db.models import Shop, SubscriptionStatus
+from app.db.models import Shop, SubscriptionStatus, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -52,30 +61,38 @@ def _get_stripe() -> stripe:
     """Configure stripe with secret key and return the module."""
     api_key = os.getenv("STRIPE_SECRET_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="STRIPE_SECRET_KEY is not configured")
+        raise HTTPException(status_code=503, detail="Stripe is not configured")
     stripe.api_key = api_key
     return stripe
 
 
 def _get_webhook_secret() -> str:
-    secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    secret = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
     if not secret:
-        raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET is not configured")
+        # 503 so Stripe retries once the secret is configured; nothing is processed.
+        raise HTTPException(status_code=503, detail="Stripe webhook verification is not configured")
     return secret
+
+
+_BILLING_ADMIN = require_roles(UserRole.admin)
 
 
 # ---------------------------------------------------------------------------
 # DB helper
 # ---------------------------------------------------------------------------
 
-def _get_shop_or_404(shop_id: str, db: Session) -> Shop:
-    try:
-        uid = _uuid.UUID(shop_id)
-    except ValueError:
-        raise HTTPException(status_code=422, detail=f"Invalid shop_id UUID format: {shop_id!r}")
-    shop = db.get(Shop, uid)
+def _actor_shop(actor: StaffActor, db: Session, claimed_shop_id: Optional[str] = None) -> Shop:
+    """The caller's own shop. A claimed shop id must match it; it never selects another shop."""
+    if claimed_shop_id is not None:
+        try:
+            claimed = _uuid.UUID(str(claimed_shop_id))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Invalid shop_id")
+        if claimed != actor.shop_id:
+            raise HTTPException(status_code=403, detail="Billing is limited to your own shop")
+    shop = db.get(Shop, actor.shop_id)
     if not shop:
-        raise HTTPException(status_code=404, detail=f"Shop {shop_id} not found")
+        raise HTTPException(status_code=404, detail="Shop not found")
     return shop
 
 
@@ -84,7 +101,7 @@ def _get_shop_or_404(shop_id: str, db: Session) -> Shop:
 # ---------------------------------------------------------------------------
 
 class CreateCustomerRequest(BaseModel):
-    shop_id: str
+    shop_id: Optional[str] = None  # legacy; must equal the caller's shop
     email: str
     name: str
 
@@ -94,8 +111,8 @@ class CreateCustomerResponse(BaseModel):
 
 
 class CreateSubscriptionRequest(BaseModel):
-    shop_id: str
-    customer_id: str
+    shop_id: Optional[str] = None  # legacy; must equal the caller's shop
+    customer_id: Optional[str] = None  # legacy; must equal the shop's Stripe customer
     price_id: str
 
 
@@ -133,22 +150,23 @@ _STRIPE_STATUS_MAP: dict = {
 @router.post("/create-customer", response_model=CreateCustomerResponse, status_code=201)
 async def create_customer(
     body: CreateCustomerRequest,
+    actor: StaffActor = Depends(_BILLING_ADMIN),
     db: Session = Depends(get_db),
 ):
     """
-    Create a Stripe Customer for the given shop and persist the customer_id.
+    Create a Stripe Customer for the caller's shop and persist the customer_id.
 
     Idempotent: if the shop already has a stripe_customer_id the existing id
     is returned without creating a duplicate in Stripe.
     """
+    shop = _actor_shop(actor, db, body.shop_id)
     _get_stripe()
-    shop = _get_shop_or_404(body.shop_id, db)
 
     # Idempotency guard
     if shop.stripe_customer_id:
         logger.info(
             "Shop %s already has Stripe customer %s — returning existing id",
-            body.shop_id,
+            shop.id,
             shop.stripe_customer_id,
         )
         return CreateCustomerResponse(customer_id=shop.stripe_customer_id)
@@ -160,13 +178,13 @@ async def create_customer(
             metadata={"shop_id": str(shop.id)},
         )
     except stripe.StripeError as exc:
-        logger.error("Stripe customer creation failed for shop %s: %s", body.shop_id, exc)
+        logger.error("Stripe customer creation failed for shop %s: %s", shop.id, exc)
         raise HTTPException(status_code=502, detail=f"Stripe error: {exc.user_message}")
 
     shop.stripe_customer_id = customer.id
     db.commit()
 
-    logger.info("Created Stripe customer %s for shop %s", customer.id, body.shop_id)
+    logger.info("Created Stripe customer %s for shop %s", customer.id, shop.id)
     return CreateCustomerResponse(customer_id=customer.id)
 
 
@@ -177,21 +195,26 @@ async def create_customer(
 @router.post("/create-subscription", response_model=CreateSubscriptionResponse, status_code=201)
 async def create_subscription(
     body: CreateSubscriptionRequest,
+    actor: StaffActor = Depends(_BILLING_ADMIN),
     db: Session = Depends(get_db),
 ):
     """
-    Create a Stripe Subscription for an existing customer / price combination.
+    Create a Stripe Subscription for the caller's shop's own Stripe customer.
 
     The shop's subscription_status is updated to reflect the Stripe status
     returned at creation time.  The latest_invoice.payment_intent is expanded
     so callers can complete 3DS authentication if required.
     """
+    shop = _actor_shop(actor, db, body.shop_id)
+    if not shop.stripe_customer_id:
+        raise HTTPException(status_code=409, detail="Create the shop's Stripe customer first")
+    if body.customer_id is not None and body.customer_id != shop.stripe_customer_id:
+        raise HTTPException(status_code=403, detail="That Stripe customer does not belong to your shop")
     _get_stripe()
-    shop = _get_shop_or_404(body.shop_id, db)
 
     try:
         subscription = stripe.Subscription.create(
-            customer=body.customer_id,
+            customer=shop.stripe_customer_id,
             items=[{"price": body.price_id}],
             metadata={"shop_id": str(shop.id)},
             expand=["latest_invoice.payment_intent"],
@@ -199,15 +222,11 @@ async def create_subscription(
     except stripe.StripeError as exc:
         logger.error(
             "Stripe subscription creation failed for shop %s / customer %s: %s",
-            body.shop_id,
-            body.customer_id,
+            shop.id,
+            shop.stripe_customer_id,
             exc,
         )
         raise HTTPException(status_code=502, detail=f"Stripe error: {exc.user_message}")
-
-    # Persist customer_id if not already stored
-    if not shop.stripe_customer_id:
-        shop.stripe_customer_id = body.customer_id
 
     # Sync subscription status from Stripe
     new_status = _STRIPE_STATUS_MAP.get(subscription.status, SubscriptionStatus.trial)
@@ -218,7 +237,7 @@ async def create_subscription(
         "Created Stripe subscription %s (status=%s) for shop %s",
         subscription.id,
         subscription.status,
-        body.shop_id,
+        shop.id,
     )
     return CreateSubscriptionResponse(
         subscription_id=subscription.id,
@@ -254,15 +273,21 @@ async def stripe_webhook(
     customer.subscription.deleted
         Sets subscription_status -> canceled.
     """
-    _get_stripe()
+    # Verification needs only the signing secret, not the Stripe API key.
+    secret = _get_webhook_secret()
+    if not stripe_signature:
+        raise HTTPException(status_code=400, detail="Missing Stripe signature")
     payload = await request.body()
 
     # ── Signature verification ────────────────────────────────────────────
+    # construct_event checks the HMAC-SHA256 signature and the timestamp
+    # tolerance (300 s) before returning; nothing below runs for an event
+    # that fails either check.
     try:
         event = stripe.Webhook.construct_event(
             payload=payload,
-            sig_header=stripe_signature or "",
-            secret=_get_webhook_secret(),
+            sig_header=stripe_signature,
+            secret=secret,
         )
     except stripe.SignatureVerificationError as exc:
         logger.warning("Stripe webhook signature verification failed: %s", exc)
@@ -397,15 +422,22 @@ def _resolve_shop(
 @router.get("/subscription/{shop_id}", response_model=SubscriptionStatusResponse)
 async def get_subscription_status(
     shop_id: str,
+    actor: StaffActor = Depends(_BILLING_ADMIN),
     db: Session = Depends(get_db),
 ):
     """
-    Return the current subscription status for a shop.
+    Return the current subscription status for the caller's own shop.
 
     Status is persisted in the database and kept in sync by Stripe webhooks.
     Possible values: trial | active | past_due | canceled.
     """
-    shop = _get_shop_or_404(shop_id, db)
+    try:
+        requested = _uuid.UUID(shop_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    if requested != actor.shop_id:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    shop = _actor_shop(actor, db)
 
     return SubscriptionStatusResponse(
         shop_id=str(shop.id),
