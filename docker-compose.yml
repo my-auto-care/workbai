@@ -17,7 +17,7 @@ services:
     restart: unless-stopped
     command: >
       sh -ec 'while true; do
-      python scripts/prune_current_visit_records.py;
+      PYTHONPATH=/app python scripts/prune_current_visit_records.py;
       touch /tmp/retention-cleanup-heartbeat;
       sleep 300;
       done'
