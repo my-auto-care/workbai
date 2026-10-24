@@ -7,6 +7,11 @@ from __future__ import annotations
 
 import logging
 import sys
+from pathlib import Path
+
+# Direct script execution sets sys.path to /app/scripts; retain /app so this
+# durable worker also works when invoked manually for a supervised recovery.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.api.checkin import prune_expired_customer_context_records
 from app.api.current_visit import prune_expired_current_visit_records

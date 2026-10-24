@@ -11,11 +11,17 @@ Example:
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import quote
 
 import httpx
+
+# Direct script execution sets sys.path to /app/scripts; retain /app so the
+# documented operator command can import the application package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db.models import VehicleCatalogEntry
 from app.db.session import SessionLocal
