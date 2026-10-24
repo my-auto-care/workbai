@@ -7,7 +7,7 @@ Create Date: 2026-10-22 19:00:00.000000
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 
 revision = "d3e4f5a6b7c8"
 down_revision = "b2c3d4e5f6a7"
@@ -33,7 +33,7 @@ def upgrade():
         sa.Column("id", UUID(as_uuid=True), nullable=False),
         sa.Column("session_id", UUID(as_uuid=True), nullable=False),
         sa.Column("template_item_id", sa.Text(), nullable=False),
-        sa.Column("condition", sa.Enum("good", "fair", "poor", "na", name="findingcondition", create_type=False), nullable=False),
+        sa.Column("condition", ENUM("good", "fair", "poor", "na", name="findingcondition", create_type=False), nullable=False),
         sa.Column("note", sa.Text(), nullable=True),
         sa.Column("measurement", sa.Text(), nullable=True),
         sa.Column("response_data", JSONB(), nullable=True),
