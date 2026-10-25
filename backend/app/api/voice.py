@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from livekit.api import AccessToken, VideoGrants
+from livekit.api import AccessToken, VideoGrants, RoomConfiguration, RoomAgentDispatch
 
 from app.db.session import get_db
 from app.db.models import InspectionSession
@@ -35,6 +35,14 @@ def create_voice_token(body: VoiceSessionRequest, db: Session = Depends(get_db))
             room=room_name,
             can_publish=True,
             can_subscribe=True,
+        ))
+        # The voice worker is a NAMED agent, so it must be dispatched by name.
+        # Without this the worker would have to run unnamed, which puts it in
+        # every room on this shared LiveKit project.
+        .with_room_config(RoomConfiguration(
+            agents=[RoomAgentDispatch(
+                agent_name=os.getenv("LIVEKIT_AGENT_NAME", "workbai-inspection")
+            )]
         ))
     )
 
