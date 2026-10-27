@@ -397,6 +397,13 @@ if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
+            # MUST stay set. A worker registered with an empty agent_name is on
+            # AUTOMATIC DISPATCH and LiveKit puts it in EVERY room on the project.
+            # This project is shared, so an unnamed worker joined LPG Recruit
+            # interviews, Command Center calls and coaching sessions and spoke the
+            # inspection greeting at them. Named => only joins when dispatched by
+            # name (see app/api/voice.py, which must request this same name).
+            agent_name=os.getenv("LIVEKIT_AGENT_NAME", "workbai-inspection"),
             api_key=os.getenv("LIVEKIT_API_KEY"),
             api_secret=os.getenv("LIVEKIT_API_SECRET"),
             ws_url=os.getenv("LIVEKIT_URL"),
